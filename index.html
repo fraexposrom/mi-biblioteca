@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mi Biblioteca</title>
+  <meta name="description" content="Registro de mis libros, CDs y películas">
+  <meta name="theme-color" content="#3F3566">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Mi Biblioteca">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="icons/logo.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Iconos -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></symbol>
+    <symbol id="i-disc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/></symbol>
+    <symbol id="i-vinyl" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="1.3"/></symbol>
+    <symbol id="i-cassette" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><circle cx="8.5" cy="11" r="1.8"/><circle cx="15.5" cy="11" r="1.8"/><path d="M7 18.5l1.5-3h7l1.5 3"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><rect x="3.5" y="4.5" width="3" height="3" rx=".5"/><rect x="3.5" y="10.5" width="3" height="3" rx=".5"/><rect x="3.5" y="16.5" width="3" height="3" rx=".5"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M4 13l3.5-3.5a2 2 0 0 1 2.8 0L12 11h3a2 2 0 0 1 0 4h-3"/><path d="M4 18h9l6.5-4.5a1.6 1.6 0 0 0-1.9-2.6L15 12.5"/></symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8 8.5v7M10.5 8.5v7M13.5 8.5v7M16 8.5v7"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
+  </svg>
+
+  <header class="topbar">
+    <div class="brand">
+      <img src="icons/logo.svg" alt="" width="34" height="34">
+      <div>
+        <h1>Mi Biblioteca</h1>
+        <p id="count" class="count">0 elementos</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="icon-btn sync-btn" id="btn-sync" aria-label="Sincronizar" hidden><svg><use href="#i-cloud"/></svg><i></i></button>
+      <button class="icon-btn" id="btn-view" aria-label="Vista compacta"><svg><use href="#i-list"/></svg></button>
+      <button class="icon-btn" id="btn-search" aria-label="Buscar"><svg><use href="#i-search"/></svg></button>
+      <button class="icon-btn" id="btn-menu" aria-label="Más opciones"><svg><use href="#i-more"/></svg></button>
+    </div>
+  </header>
+
+  <div class="search-bar" id="search-bar" hidden>
+    <input type="search" id="search" placeholder="Buscar título, autor, artista…" autocomplete="off">
+    <button class="btn ghost scan-btn" id="btn-scan-search" aria-label="Escanear código: ¿ya lo tengo?"><svg><use href="#i-scan"/></svg></button>
+  </div>
+
+  <nav class="filters" aria-label="Filtrar por tipo">
+    <div class="chips" id="type-chips">
+      <button class="chip active" data-type="all">Todo <span></span></button>
+      <button class="chip" data-type="libro">Libros <span></span></button>
+      <button class="chip" data-type="cd">Música <span></span></button>
+      <button class="chip" data-type="pelicula">Películas <span></span></button>
+      <button class="chip loaned" id="chip-loaned" hidden><svg><use href="#i-hand"/></svg>Prestados <span></span></button>
+    </div>
+    <div class="chips sub" id="format-chips" hidden></div>
+  </nav>
+
+  <main>
+    <div id="tip" class="tip" hidden></div>
+    <div id="grid" class="grid"></div>
+    <div id="empty" class="empty" hidden>
+      <img src="icons/logo.svg" alt="" width="72" height="72">
+      <h2 id="empty-title">Tu biblioteca está vacía</h2>
+      <p id="empty-text">Pulsa <strong>+</strong> para añadir tu primer libro, disco o película.</p>
+    </div>
+  </main>
+
+  <button class="fab" id="btn-add" aria-label="Añadir"><svg><use href="#i-plus"/></svg></button>
+
+  <!-- Detalle -->
+  <dialog id="dlg-detail" class="sheet">
+    <div class="sheet-inner">
+      <button class="icon-btn close" data-close aria-label="Cerrar"><svg><use href="#i-x"/></svg></button>
+      <div class="detail-cover" id="d-cover"></div>
+      <span class="pill" id="d-type"></span>
+      <h2 id="d-title"></h2>
+      <p class="muted" id="d-creator"></p>
+      <dl class="meta" id="d-meta"></dl>
+      <div class="loan-box" id="d-loan"></div>
+      <p class="notes" id="d-notes"></p>
+      <div class="history" id="d-history"></div>
+      <div class="row-actions">
+        <button class="btn ghost danger" id="d-delete"><svg><use href="#i-trash"/></svg>Eliminar</button>
+        <button class="btn primary" id="d-edit"><svg><use href="#i-edit"/></svg>Editar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Formulario -->
+  <dialog id="dlg-form" class="sheet">
+    <form class="sheet-inner" id="form" method="dialog" novalidate>
+      <div class="sheet-head">
+        <h2 id="form-title">Añadir</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Cerrar"><svg><use href="#i-x"/></svg></button>
+      </div>
+
+      <div class="segmented" id="f-type" role="radiogroup" aria-label="Tipo">
+        <button type="button" data-value="libro"><svg><use href="#i-book"/></svg>Libro</button>
+        <button type="button" data-value="cd"><svg><use href="#i-disc"/></svg>Música</button>
+        <button type="button" data-value="pelicula"><svg><use href="#i-film"/></svg>Película</button>
+      </div>
+
+      <div class="segmented small" id="f-format" role="radiogroup" aria-label="Formato" hidden></div>
+
+      <button type="button" class="btn ghost scan-cta" id="f-scan"><svg><use href="#i-scan"/></svg>Escanear código de barras</button>
+
+      <div class="cover-edit">
+        <div class="cover-preview" id="f-cover-preview"></div>
+        <div class="cover-actions">
+          <button type="button" class="btn ghost" id="f-online"><svg><use href="#i-globe"/></svg>Buscar portada</button>
+          <button type="button" class="btn ghost" id="f-url"><svg><use href="#i-link"/></svg>Pegar URL de imagen</button>
+          <button type="button" class="btn ghost danger" id="f-cover-remove" hidden><svg><use href="#i-trash"/></svg>Quitar</button>
+        </div>
+      </div>
+
+      <div class="online" id="online" hidden>
+        <div class="online-head">
+          <input type="search" id="online-q" placeholder="Título o ISBN">
+          <button type="button" class="btn primary" id="online-go">Buscar</button>
+        </div>
+        <p class="muted small" id="online-status"></p>
+        <div class="online-results" id="online-results"></div>
+      </div>
+
+      <label class="field"><span>Título *</span><input id="f-title" required autocomplete="off"></label>
+      <label class="field"><span id="f-creator-label">Autor</span><input id="f-creator" autocomplete="off"></label>
+      <div class="field-row">
+        <label class="field"><span>Año</span><input id="f-year" inputmode="numeric" maxlength="4" autocomplete="off"></label>
+        <label class="field"><span>Género</span><input id="f-genre" autocomplete="off" list="genres"></label>
+      </div>
+      <datalist id="genres"></datalist>
+      <div class="field">
+        <span id="f-code-label">ISBN / código de barras</span>
+        <div class="code-row">
+          <input id="f-code" inputmode="numeric" autocomplete="off" placeholder="978…" aria-labelledby="f-code-label">
+          <button type="button" class="btn ghost" id="f-code-lookup">Buscar datos</button>
+        </div>
+      </div>
+      <label class="field"><span>Ubicación</span><input id="f-location" autocomplete="off" list="locations" placeholder="Salón, estantería 2…"></label>
+      <datalist id="locations"></datalist>
+      <datalist id="people"></datalist>
+      <label class="field"><span>Notas</span><textarea id="f-notes" rows="3" placeholder="Edición, estado, firmado…"></textarea></label>
+      <p class="error" id="f-error" hidden></p>
+
+      <div class="row-actions sticky">
+        <button type="button" class="btn ghost" data-close>Cancelar</button>
+        <button type="submit" class="btn primary" id="f-save">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Menú -->
+  <dialog id="dlg-menu" class="sheet">
+    <div class="sheet-inner">
+      <div class="sheet-head">
+        <h2>Opciones</h2>
+        <button class="icon-btn" data-close aria-label="Cerrar"><svg><use href="#i-x"/></svg></button>
+      </div>
+      <p class="label">Ordenar por</p>
+      <div class="segmented small wrap" id="sort">
+        <button type="button" data-value="recent">Recientes</button>
+        <button type="button" data-value="title">Título</button>
+        <button type="button" data-value="creator">Autor</button>
+        <button type="button" data-value="year">Año</button>
+      </div>
+      <p class="label">Copia de seguridad</p>
+      <p class="muted small">Descarga o recupera toda la biblioteca en un archivo .json.</p>
+      <div class="row-actions">
+        <button class="btn ghost" id="btn-export">Exportar</button>
+        <label class="btn ghost">Importar<input type="file" accept="application/json,.json" id="file-import" hidden></label>
+      </div>
+      <p class="label">Sincronizar con GitHub</p>
+      <div id="sync-off">
+        <p class="muted small">Guarda la biblioteca en un archivo JSON de un repositorio privado tuyo. Así la tienes en la nube y la ves igual en todos tus dispositivos.</p>
+        <label class="field"><span>Usuario de GitHub</span><input id="gh-owner" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"></label>
+        <label class="field"><span>Repositorio de datos</span><input id="gh-repo" placeholder="mi-biblioteca-datos" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"></label>
+        <label class="field"><span>Token de acceso</span><input id="gh-token" type="password" placeholder="github_pat_…" autocomplete="off"></label>
+        <details class="adv">
+          <summary>Opciones avanzadas</summary>
+          <div class="field-row">
+            <label class="field"><span>Rama</span><input id="gh-branch" placeholder="(la principal)" autocapitalize="off" autocomplete="off"></label>
+            <label class="field"><span>Archivo</span><input id="gh-path" placeholder="biblioteca.json" autocapitalize="off" autocomplete="off"></label>
+          </div>
+        </details>
+        <p class="error" id="gh-error" hidden></p>
+        <button class="btn primary full" id="gh-connect">Conectar</button>
+      </div>
+      <div id="sync-on" hidden>
+        <p class="small">Conectado a <strong id="gh-where"></strong></p>
+        <p class="muted small" id="gh-status"></p>
+        <div class="row-actions">
+          <button class="btn ghost danger" id="gh-disconnect">Desconectar</button>
+          <button class="btn primary" id="gh-sync">Sincronizar ahora</button>
+        </div>
+      </div>
+      <p class="muted small stats" id="stats"></p>
+    </div>
+  </dialog>
+
+  <!-- Escáner -->
+  <dialog id="dlg-scan" class="scan">
+    <div class="scan-view">
+      <video id="scan-video" playsinline muted autoplay></video>
+      <div class="scan-frame"><i></i></div>
+      <button type="button" class="icon-btn scan-close" id="scan-close" aria-label="Cerrar escáner"><svg><use href="#i-x"/></svg></button>
+      <p class="scan-hint" id="scan-hint">Apunta al código de barras</p>
+    </div>
+    <form class="scan-manual" id="scan-manual" novalidate>
+      <input id="scan-input" inputmode="numeric" placeholder="O escribe el código (ISBN, EAN…)" autocomplete="off" aria-label="Código de barras">
+      <button class="btn primary">Usar</button>
+    </form>
+  </dialog>
+
+  <!-- Pregunta / confirmación -->
+  <dialog id="dlg-ask" class="sheet">
+    <form class="sheet-inner" id="ask-form" novalidate>
+      <h2 id="ask-title" class="ask-title"></h2>
+      <p class="muted small" id="ask-text"></p>
+      <div id="ask-fields"></div>
+      <p class="error" id="ask-error" hidden></p>
+      <div class="row-actions">
+        <button type="button" class="btn ghost" id="ask-cancel">Cancelar</button>
+        <button type="submit" class="btn primary" id="ask-ok">Aceptar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"><span></span><button type="button" hidden></button></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
