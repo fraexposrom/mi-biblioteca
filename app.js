@@ -17,6 +17,12 @@ const FORMATS = {
 };
 // Proporción (ancho/alto) por defecto de cada formato, para que el hueco se parezca al objeto real
 const DEFAULT_AR = { libro: 2 / 3, CD: 1, Vinilo: 1, Casete: 0.64, DVD: 0.7, 'Blu-ray': 0.8, '4K UHD': 0.8, Grabada: 0.7 };
+// Leído / visto (solo libros y películas)
+const SEEN = {
+  libro:    { done: 'Leído', mark: 'Marcar como leído', pend: 'Por leer', many: 'Leídos', ask: 'Ya lo he leído', verb: 'leído' },
+  pelicula: { done: 'Vista', mark: 'Marcar como vista', pend: 'Por ver',  many: 'Vistas', ask: 'Ya la he visto', verb: 'vista' },
+};
+const canSee = i => !!SEEN[i.type];
 const FORMAT_ICON = { CD: 'i-disc', Vinilo: 'i-vinyl', Casete: 'i-cassette' };
 const PH_COLORS = {
   libro: ['#3F3566', '#5B4B8A', '#2E4A62', '#6B3E5E', '#2F5D50'],
@@ -61,6 +67,7 @@ const state = {
   type: localStorage.getItem('mb-type') || 'all',
   format: 'all',
   loaned: false,
+  seen: 'all',        // all | pending | done
   query: '',
   sort: localStorage.getItem('mb-sort') || 'recent',
   view: localStorage.getItem('mb-view') || 'grid',
@@ -182,10 +189,11 @@ function coverHTML(item, { lazy = true } = {}) {
   const showBadge = item.type === 'pelicula' || (item.type === 'cd' && f !== 'CD');
   const badge = showBadge ? `<span class="badge f-${f.split(' ')[0]}">${esc(f.toUpperCase())}</span>` : '';
   const loan = item.loan ? `<span class="loan-tag">Prestado · ${esc(item.loan.to)}</span>` : '';
+  const seen = canSee(item) && item.seen ? `<span class="seen-mark" title="${SEEN[item.type].done}" aria-label="${SEEN[item.type].done}"><svg><use href="#i-check"/></svg></span>` : '';
   const img = item.cover
     ? `<img src="${esc(item.cover)}" alt="" ${lazy ? 'loading="lazy"' : ''} onload="coverLoaded(this)" onerror="coverFailed(this)">`
     : '';
-  return `<div class="cover-box"><div class="cover" data-def="${def}" style="${coverStyle(ar)}">${img}${placeholderHTML(item, !!item.cover)}${badge}${loan}</div></div>`;
+  return `<div class="cover-box"><div class="cover" data-def="${def}" style="${coverStyle(ar)}">${img}${placeholderHTML(item, !!item.cover)}${badge}${seen}${loan}</div></div>`;
 }
 /** Ajusta el hueco a la proporción real de la imagen descargada. */
 window.coverLoaded = img => {
@@ -210,6 +218,7 @@ function filtered() {
     (state.type === 'all' || i.type === state.type) &&
     (state.format === 'all' || fmtOf(i) === state.format) &&
     (!state.loaned || i.loan) &&
+    (state.seen === 'all' || (canSee(i) && (state.seen === 'done' ? !!i.seen : !i.seen))) &&
     (!q || norm(`${i.title} ${i.creator} ${i.genre} ${i.year} ${i.notes} ${i.location} ${i.loan?.to || ''} ${fmtOf(i)} ${i.code || ''}`).includes(q))
   );
   const cmp = (a, b) => a.localeCompare(b, 'es', { sensitivity: 'base', numeric: true });
@@ -232,6 +241,7 @@ function cardHTML(i) {
 function rowHTML(i) {
   const sub = [i.creator, i.year].filter(Boolean).join(' · ');
   const tags = [`<span class="tag">${esc(typeLabel(i))}</span>`];
+  if (canSee(i) && i.seen) tags.push(`<span class="tag seen"><svg><use href="#i-check"/></svg>${SEEN[i.type].done}</span>`);
   if (i.loan) tags.push(`<span class="tag loan">Prestado · ${esc(i.loan.to)}</span>`);
   if (i.location) tags.push(`<span class="tag"><svg><use href="#i-pin"/></svg>${esc(i.location)}</span>`);
   return `<button class="row" data-id="${i.id}">
@@ -247,12 +257,27 @@ function rowHTML(i) {
 function renderFormatChips() {
   const box = $('#format-chips');
   const formats = FORMATS[state.type] || [];
-  box.hidden = !formats.length;
-  if (!formats.length) return;
+  // Filtro leído/visto: en Todo, Libros y Películas (no en Música)
+  const seeable = state.items.filter(i => canSee(i) && (state.type === 'all' || i.type === state.type));
+  const showSeen = state.type !== 'cd' && seeable.length > 0;
+  if (!showSeen && state.seen !== 'all') state.seen = 'all';
+  box.hidden = !formats.length && !showSeen;
+  if (box.hidden) return;
   const counts = {};
   state.items.forEach(i => { if (i.type === state.type) counts[fmtOf(i)] = (counts[fmtOf(i)] || 0) + 1; });
-  box.innerHTML = [['all', 'Todos'], ...formats.map(f => [f, f])].map(([v, l]) =>
-    `<button class="chip small${state.format === v ? ' active' : ''}" data-format="${v}">${l}${v !== 'all' && counts[v] ? ` <span>${counts[v]}</span>` : ''}</button>`).join('');
+  let html = '';
+  if (formats.length) {
+    html += [['all', 'Todos'], ...formats.map(f => [f, f])].map(([v, l]) =>
+      `<button class="chip small${state.format === v ? ' active' : ''}" data-format="${v}">${l}${v !== 'all' && counts[v] ? ` <span>${counts[v]}</span>` : ''}</button>`).join('');
+  }
+  if (showSeen) {
+    const lbl = SEEN[state.type] || { pend: 'Pendientes', many: 'Leídos y vistos' };
+    const nDone = seeable.filter(i => i.seen).length;
+    if (formats.length) html += '<span class="chip-sep" aria-hidden="true"></span>';
+    html += [['pending', lbl.pend, seeable.length - nDone], ['done', lbl.many, nDone]].map(([v, l, n]) =>
+      `<button class="chip small seen-chip${state.seen === v ? ' active' : ''}" data-seen="${v}">${v === 'done' ? '<svg><use href="#i-check"/></svg>' : ''}${l}${n ? ` <span>${n}</span>` : ''}</button>`).join('');
+  }
+  box.innerHTML = html;
 }
 
 function render() {
@@ -345,6 +370,11 @@ function openDetail(item) {
     ? `<div class="on"><p><strong>Prestado a ${esc(item.loan.to)}</strong><br><small>Desde el ${fmtDate(item.loan.since)} (${agoText(item.loan.since)})</small></p>
          <button class="btn primary" id="d-return">Devuelto</button></div>`
     : `<button class="btn ghost full" id="d-lend"><svg><use href="#i-hand"/></svg>Prestar</button>`;
+  const sl = SEEN[item.type];
+  $('#d-seen').innerHTML = !sl ? '' : item.seen
+    ? `<div class="on seen-on"><p><strong><svg><use href="#i-check"/></svg>${sl.done}</strong></p>
+         <button class="btn ghost" id="d-unsee">Desmarcar</button></div>`
+    : `<button class="btn ghost full" id="d-see"><svg><use href="#i-check"/></svg>${sl.mark}</button>`;
   $('#d-notes').textContent = item.notes || '';
   const hist = item.loanHistory || [];
   $('#d-history').innerHTML = hist.length
@@ -380,6 +410,14 @@ async function lendItem() {
   const next = await updateItem(it, { loan: { to: r.to, since: r.since } });
   openDetail(next);
   toast(`Prestado a ${r.to}`);
+}
+
+async function toggleSeen(on) {
+  const it = state.detail;
+  if (!it || !canSee(it)) return;
+  const next = await updateItem(it, { seen: on });
+  openDetail(next);
+  toast(on ? `Marcado como ${SEEN[it.type].verb}` : 'Desmarcado');
 }
 
 async function returnItem() {
@@ -437,6 +475,9 @@ function updateFormType() {
   setSegmented(ff, form.format);
   $('#f-creator-label').textContent = TYPES[form.type].creator;
   const isBook = form.type === 'libro';
+  const sl = SEEN[form.type];
+  $('#f-seen-field').hidden = !sl;
+  if (sl) $('#f-seen-label').textContent = sl.ask;
   $('#f-scan').hidden = !isBook;
   $('#f-code-field').hidden = !isBook;
   $('#online-q').placeholder = form.type === 'libro' ? 'Título, autor o ISBN' : form.type === 'cd' ? 'Álbum y artista' : 'Título de la película';
@@ -465,6 +506,7 @@ function openForm(item = null) {
   $('#f-year').value = item?.year || '';
   $('#f-genre').value = item?.genre || '';
   $('#f-location').value = item?.location || '';
+  $('#f-seen').checked = !!item?.seen;
   $('#f-code').value = item?.code || '';
   $('#f-notes').value = item?.notes || '';
   $('#f-error').hidden = true;
@@ -505,6 +547,7 @@ async function saveForm(e) {
   const item = {
     loan: null, loanHistory: [],
     ...(editing || { id: uid(), createdAt: Date.now() }),
+    seenAt: undefined,
     type: form.type,
     format: form.format,
     title,
@@ -512,6 +555,7 @@ async function saveForm(e) {
     year,
     genre: $('#f-genre').value.trim(),
     location: $('#f-location').value.trim(),
+    seen: !!SEEN[form.type] && $('#f-seen').checked,
     code,
     notes: $('#f-notes').value.trim(),
     cover: form.cover,
@@ -1164,6 +1208,12 @@ function updateStats() {
     `${c.cd} de música${part(FORMATS.cd) ? ` (${part(FORMATS.cd)})` : ''}`,
     `${plural(c.pelicula, 'película', 'películas')}${part(FORMATS.pelicula) ? ` (${part(FORMATS.pelicula)})` : ''}`,
   ].join(' · ') + (loaned ? ` · ${loaned} prestado${loaned === 1 ? '' : 's'}` : '');
+  const sb = state.items.filter(i => i.type === 'libro' && i.seen).length;
+  const sp = state.items.filter(i => i.type === 'pelicula' && i.seen).length;
+  const parts = [];
+  if (c.libro) parts.push(`${sb} de ${plural(c.libro, 'libro leído', 'libros leídos')}`);
+  if (c.pelicula) parts.push(`${sp} de ${plural(c.pelicula, 'película vista', 'películas vistas')}`);
+  $('#stats-seen').textContent = parts.join(' · ');
 }
 
 /* ---------- Sincronización con GitHub ----------
@@ -1451,7 +1501,8 @@ function bind() {
   });
   $('#format-chips').addEventListener('click', e => {
     const c = e.target.closest('.chip'); if (!c) return;
-    state.format = c.dataset.format;
+    if (c.dataset.seen) state.seen = state.seen === c.dataset.seen ? 'all' : c.dataset.seen;   // tocar otra vez lo quita
+    else state.format = c.dataset.format;
     render();
   });
 
@@ -1512,6 +1563,10 @@ function bind() {
   // Detalle
   $('#d-edit').addEventListener('click', () => openForm(state.detail));
   $('#d-delete').addEventListener('click', deleteItem);
+  $('#d-seen').addEventListener('click', e => {
+    if (e.target.closest('#d-see')) toggleSeen(true);
+    if (e.target.closest('#d-unsee')) toggleSeen(false);
+  });
   $('#d-loan').addEventListener('click', e => {
     if (e.target.closest('#d-lend')) lendItem();
     if (e.target.closest('#d-return')) returnItem();

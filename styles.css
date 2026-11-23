@@ -353,3 +353,23 @@ dialog.scan::backdrop { background: #000; }
 .small-btn { padding: 6px 12px; font-size: 13px; margin-top: 2px; }
 .tiny { font-size: 11px; margin-top: 8px; }
 #tmdb-status:empty { display: none; }
+
+/* Leído / visto */
+.seen-mark {
+  position: absolute; top: 5px; left: 5px; width: 20px; height: 20px; border-radius: 50%;
+  background: #2E9D5B; color: #fff; display: grid; place-items: center; box-shadow: 0 1px 3px rgba(0,0,0,.35);
+}
+.seen-mark svg { width: 13px; height: 13px; stroke-width: 3; }
+.row .seen-mark { display: none; }
+.tag.seen { background: #DDF3E5; color: #1D6B3C; }
+@media (prefers-color-scheme: dark) { .tag.seen { background: #1E3A2A; color: #8FE0AE; } }
+.chip-sep { flex-shrink: 0; width: 1px; margin: 4px 2px; background: var(--border); }
+.chip.seen-chip svg { width: 14px; height: 14px; stroke-width: 2.6; }
+.chips.sub .chip.seen-chip.active { background: #2E9D5B; color: #fff; border-color: #2E9D5B; }
+.loan-box .seen-on { background: color-mix(in srgb, #2E9D5B 18%, var(--surface)); }
+.seen-on strong { display: inline-flex; align-items: center; gap: 6px; }
+.seen-on strong svg { width: 18px; height: 18px; color: #2E9D5B; stroke-width: 2.6; }
+#d-seen:empty { display: none; }
+.seen-field { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 2px 0 12px; }
+.check { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500; cursor: pointer; padding: 6px 0; }
+.check input { width: 22px; height: 22px; accent-color: #2E9D5B; margin: 0; }

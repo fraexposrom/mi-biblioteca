@@ -38,6 +38,7 @@
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></symbol>
     <symbol id="i-hand" viewBox="0 0 24 24"><path d="M4 13l3.5-3.5a2 2 0 0 1 2.8 0L12 11h3a2 2 0 0 1 0 4h-3"/><path d="M4 18h9l6.5-4.5a1.6 1.6 0 0 0-1.9-2.6L15 12.5"/></symbol>
     <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8 8.5v7M10.5 8.5v7M13.5 8.5v7M16 8.5v7"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
     <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
   </svg>
 
@@ -94,6 +95,7 @@
       <h2 id="d-title"></h2>
       <p class="muted" id="d-creator"></p>
       <dl class="meta" id="d-meta"></dl>
+      <div class="loan-box" id="d-seen"></div>
       <div class="loan-box" id="d-loan"></div>
       <p class="notes" id="d-notes"></p>
       <div class="history" id="d-history"></div>
@@ -153,6 +155,9 @@
           <input id="f-code" inputmode="numeric" autocomplete="off" placeholder="978…" aria-labelledby="f-code-label">
           <button type="button" class="btn ghost" id="f-code-lookup">Buscar datos</button>
         </div>
+      </div>
+      <div class="seen-field" id="f-seen-field">
+        <label class="check"><input type="checkbox" id="f-seen"><span id="f-seen-label">Ya lo he leído</span></label>
       </div>
       <label class="field"><span>Ubicación</span><input id="f-location" autocomplete="off" list="locations" placeholder="Salón, estantería 2…"></label>
       <datalist id="locations"></datalist>
@@ -222,6 +227,7 @@
         </div>
       </div>
       <p class="muted small stats" id="stats"></p>
+      <p class="muted small" id="stats-seen"></p>
     </div>
   </dialog>
 

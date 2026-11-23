@@ -27,6 +27,7 @@ App web para registrar mis libros, música (CD, vinilo, casete) y películas (DV
 - **Portada:** búscala desde la app (libros en Open Library; música en iTunes; películas en TMDB, Wikipedia e iTunes a la vez, indicando de dónde sale cada una) o pega la URL de una imagen de internet (mantén pulsada la imagen en el navegador → *Copiar dirección de la imagen*). La app comprueba que la imagen carga. Si no hay portada, genera una con el título.
 - **Ubicación:** dónde está guardado (p. ej. «Salón, estantería 2»). La app te sugiere las ubicaciones que ya usaste.
 - **Duplicados:** si añades algo que ya tienes (mismo tipo y título), la app te avisa antes de guardar.
+- **Leído / visto:** en libros y películas, pulsa *Marcar como leído* (o *Marcar como vista*) en la ficha, o marca la casilla «Ya lo he leído» / «Ya la he visto» al añadir o editar. Las portadas muestran una marca verde. Debajo de los filtros tienes *Por leer* / *Leídos* en Libros, *Por ver* / *Vistas* en Películas y *Pendientes* / *Leídos y vistos* en Todo (tócalo otra vez para quitar el filtro). En el menú ⋯ verás cuántos llevas.
 - **Préstamos:** en la ficha de un elemento, *Prestar* → a quién y desde cuándo. La portada muestra una cinta amarilla «Prestado · nombre», y el filtro **Prestados** reúne todo lo que tienes prestado. *Devuelto* lo guarda en el historial de préstamos.
 - **Borrar:** se borra al momento y tienes unos segundos para pulsar *Deshacer*.
 - **Filtros:** Todo, Libros, Música, Películas y, dentro de Música y Películas, por formato. La app recuerda el último filtro.
@@ -101,7 +102,7 @@ El token se guarda solo en el navegador de cada dispositivo y únicamente da acc
 
 ## Actualizar la app
 
-Si cambias algún archivo, sube en `sw.js` el valor de `VERSION` (p. ej. de `mb-v5` a `mb-v6`). Al abrir la app, los móviles mostrarán «Hay una nueva versión de la app · Actualizar».
+Si cambias algún archivo, sube en `sw.js` el valor de `VERSION` (p. ej. de `mb-v7` a `mb-v8`). Al abrir la app, los móviles mostrarán «Hay una nueva versión de la app · Actualizar».
 
 ## Archivos
 
