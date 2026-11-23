@@ -59,7 +59,7 @@
 
   <div class="search-bar" id="search-bar" hidden>
     <input type="search" id="search" placeholder="Buscar título, autor, artista…" autocomplete="off">
-    <button class="btn ghost scan-btn" id="btn-scan-search" aria-label="Escanear código: ¿ya lo tengo?"><svg><use href="#i-scan"/></svg></button>
+    <button class="btn ghost scan-btn" id="btn-scan-search" aria-label="Escanear ISBN de un libro: ¿ya lo tengo?"><svg><use href="#i-scan"/></svg></button>
   </div>
 
   <nav class="filters" aria-label="Filtrar por tipo">
@@ -120,7 +120,7 @@
 
       <div class="segmented small" id="f-format" role="radiogroup" aria-label="Formato" hidden></div>
 
-      <button type="button" class="btn ghost scan-cta" id="f-scan"><svg><use href="#i-scan"/></svg>Escanear código de barras</button>
+      <button type="button" class="btn ghost scan-cta" id="f-scan"><svg><use href="#i-scan"/></svg>Escanear ISBN del libro</button>
 
       <div class="cover-edit">
         <div class="cover-preview" id="f-cover-preview"></div>
@@ -147,8 +147,8 @@
         <label class="field"><span>Género</span><input id="f-genre" autocomplete="off" list="genres"></label>
       </div>
       <datalist id="genres"></datalist>
-      <div class="field">
-        <span id="f-code-label">ISBN / código de barras</span>
+      <div class="field" id="f-code-field">
+        <span id="f-code-label">ISBN</span>
         <div class="code-row">
           <input id="f-code" inputmode="numeric" autocomplete="off" placeholder="978…" aria-labelledby="f-code-label">
           <button type="button" class="btn ghost" id="f-code-lookup">Buscar datos</button>
@@ -181,6 +181,16 @@
         <button type="button" data-value="creator">Autor</button>
         <button type="button" data-value="year">Año</button>
       </div>
+      <p class="label">Portadas de películas</p>
+      <p class="muted small">Las portadas se buscan en Wikipedia e iTunes. Con una clave gratuita de <strong>TMDB</strong> (The Movie Database) encontrarás la de casi cualquier película o serie, con carteles en español cuando existan.</p>
+      <div class="code-row tmdb-row">
+        <input id="tmdb-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Clave de TMDB">
+        <button type="button" class="btn primary" id="tmdb-save">Guardar</button>
+      </div>
+      <p class="muted small" id="tmdb-status"></p>
+      <button type="button" class="btn ghost danger small-btn" id="tmdb-remove" hidden>Quitar clave</button>
+      <p class="muted tiny">Este producto usa la API de TMDB, pero no está avalado ni certificado por TMDB.</p>
+
       <p class="label">Copia de seguridad</p>
       <p class="muted small">Descarga o recupera toda la biblioteca en un archivo .json.</p>
       <div class="row-actions">
@@ -224,7 +234,7 @@
       <p class="scan-hint" id="scan-hint">Apunta al código de barras</p>
     </div>
     <form class="scan-manual" id="scan-manual" novalidate>
-      <input id="scan-input" inputmode="numeric" placeholder="O escribe el código (ISBN, EAN…)" autocomplete="off" aria-label="Código de barras">
+      <input id="scan-input" inputmode="numeric" placeholder="O escribe el ISBN" autocomplete="off" aria-label="ISBN">
       <button class="btn primary">Usar</button>
     </form>
   </dialog>

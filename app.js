@@ -436,6 +436,9 @@ function updateFormType() {
   ff.innerHTML = formats.map(f => `<button type="button" data-value="${f}">${f}</button>`).join('');
   setSegmented(ff, form.format);
   $('#f-creator-label').textContent = TYPES[form.type].creator;
+  const isBook = form.type === 'libro';
+  $('#f-scan').hidden = !isBook;
+  $('#f-code-field').hidden = !isBook;
   $('#online-q').placeholder = form.type === 'libro' ? 'Título, autor o ISBN' : form.type === 'cd' ? 'Álbum y artista' : 'Título de la película';
   updateCoverPreview();
 }
@@ -492,9 +495,10 @@ async function saveForm(e) {
   const err = $('#f-error');
   if (!title) { err.textContent = 'Escribe al menos el título.'; err.hidden = false; $('#f-title').focus(); return; }
   if (year && !/^\d{4}$/.test(year)) { err.textContent = 'El año debe tener 4 cifras (p. ej. 1999).'; err.hidden = false; $('#f-year').focus(); return; }
-  const rawCode = $('#f-code').value.trim();
-  const code = rawCode ? normalizeCode(rawCode) : '';
-  if (rawCode && !code) { err.textContent = 'El código no es válido. Revisa los números (ISBN de 10 o 13 cifras, o EAN de 8, 12 o 13).'; err.hidden = false; $('#f-code').focus(); return; }
+  // El ISBN solo se pide en libros; en música y películas se conserva el código que ya tuviera
+  const rawCode = form.type === 'libro' ? $('#f-code').value.trim() : '';
+  const code = form.type === 'libro' ? (rawCode ? normalizeCode(rawCode) : '') : (state.editing?.code || '');
+  if (rawCode && (!code || !isISBN(code))) { err.textContent = 'El ISBN no es válido. Revisa los números (10 o 13 cifras).'; err.hidden = false; $('#f-code').focus(); return; }
   err.hidden = true;
 
   const editing = state.editing;
@@ -587,8 +591,8 @@ function jsonp(url) {
   });
 }
 
-async function itunes(term, entity) {
-  const base = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=${entity}&limit=15&country=ES&lang=es_es`;
+async function itunes(term, entity, country = 'ES') {
+  const base = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=${entity}&limit=15&country=${country}&lang=es_es`;
   let data;
   try {
     const r = await fetch(base);
@@ -603,7 +607,140 @@ async function itunes(term, entity) {
     year: (r.releaseDate || '').slice(0, 4),
     genre: r.primaryGenreName || '',
     cover: (r.artworkUrl100 || '').replace(/\/\d+x\d+bb\./, '/600x600bb.'),
+    source: 'iTunes',
   })).filter(r => r.cover);
+}
+
+/* ---------- Portadas de películas ----------
+   Se busca a la vez en TMDB (si hay clave), Wikipedia e iTunes y se juntan los resultados. */
+const TMDB_API = 'https://api.themoviedb.org/3';
+const TMDB_IMG = 'https://image.tmdb.org/t/p/w500';
+const tmdbKey = () => localStorage.getItem('mb-tmdb') || '';
+async function tmdbFetch(path, params = {}, key = tmdbKey()) {
+  const u = new URL(TMDB_API + path);
+  Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
+  const headers = { Accept: 'application/json' };
+  // Admite el «token de acceso de lectura» (empieza por eyJ) o la «clave de API» (32 caracteres)
+  if (key.startsWith('eyJ')) headers.Authorization = 'Bearer ' + key;
+  else u.searchParams.set('api_key', key);
+  const r = await fetch(u, { headers });
+  if (r.status === 401) throw new Error('tmdb-auth');
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+let tmdbGenres = null;
+async function tmdbGenreMap() {
+  if (tmdbGenres) return tmdbGenres;
+  try {
+    const [m, t] = await Promise.all([tmdbFetch('/genre/movie/list', { language: 'es-ES' }), tmdbFetch('/genre/tv/list', { language: 'es-ES' })]);
+    tmdbGenres = Object.fromEntries([...(m.genres || []), ...(t.genres || [])].map(g => [g.id, g.name]));
+  } catch { tmdbGenres = {}; }
+  return tmdbGenres;
+}
+async function tmdbSearch(q) {
+  if (!tmdbKey()) return [];
+  const [d, genres] = await Promise.all([
+    tmdbFetch('/search/multi', { query: q, language: 'es-ES', include_adult: 'false' }),
+    tmdbGenreMap(),
+  ]);
+  const hits = (d.results || []).filter(r => (r.media_type === 'movie' || r.media_type === 'tv') && r.poster_path).slice(0, 8);
+  const out = hits.map(r => ({
+    title: r.title || r.name,
+    creator: '',
+    year: (r.release_date || r.first_air_date || '').slice(0, 4),
+    genre: genres[(r.genre_ids || [])[0]] || '',
+    cover: TMDB_IMG + r.poster_path,
+    source: 'TMDB',
+    tmdb: { id: r.id, type: r.media_type },
+  }));
+  // Más carteles del primer resultado: primero los españoles, luego los mejor valorados
+  if (hits[0]) {
+    try {
+      const im = await tmdbFetch(`/${hits[0].media_type}/${hits[0].id}/images`, { include_image_language: 'es,en,null' });
+      const seen = new Set(out.map(o => o.cover));
+      const extra = (im.posters || [])
+        .sort((a, b) => ((b.iso_639_1 === 'es') - (a.iso_639_1 === 'es')) || (b.vote_average - a.vote_average))
+        .map(p => ({ ...out[0], cover: TMDB_IMG + p.file_path }))
+        .filter(o => !seen.has(o.cover))
+        .slice(0, 6);
+      out.splice(1, 0, ...extra);
+    } catch {}
+  }
+  return out;
+}
+/** Director (películas) o creadores (series) de un resultado de TMDB. */
+async function tmdbCreator({ id, type }) {
+  if (type === 'movie') {
+    const c = await tmdbFetch(`/movie/${id}/credits`, { language: 'es-ES' });
+    return (c.crew || []).filter(p => p.job === 'Director').map(p => p.name).slice(0, 2).join(', ');
+  }
+  const t = await tmdbFetch(`/tv/${id}`, { language: 'es-ES' });
+  return (t.created_by || []).map(p => p.name).slice(0, 2).join(', ');
+}
+
+/** Wikipedia en español y en inglés (la inglesa suele tener el cartel aunque la española no). */
+const FILM_RE = /pel[ií]cula|film|serie|series|telenovela|miniserie|documental|documentary|animated|animaci[oó]n/i;
+function wikiItem(p) {
+  const desc = p.description || '';
+  const paren = (p.title.match(/\(([^)]*)\)\s*$/) || ['', ''])[1];
+  if (!FILM_RE.test(desc) && !FILM_RE.test(paren)) return null;   // descarta actores, libros, etc.
+  const src = p.thumbnail?.source;
+  if (!src || /\.svg/i.test(src)) return null;
+  const director = (desc.match(/(?:dirigida por|directed by|film by|película de [^,]*? de)\s+(.+)$/i) || ['', ''])[1].replace(/\.$/, '');
+  return {
+    title: p.title.replace(/\s*\([^)]*(pel[ií]cula|film|serie|series|TV)[^)]*\)\s*$/i, ''),
+    creator: director,
+    year: ((desc + ' ' + paren).match(/\b(19|20)\d{2}\b/) || [''])[0],
+    genre: '',
+    cover: src,
+    source: 'Wikipedia',
+  };
+}
+async function wikiQuery(lang, params) {
+  const u = new URL(`https://${lang}.wikipedia.org/w/api.php`);
+  Object.entries({ action: 'query', format: 'json', origin: '*', redirects: '1', prop: 'pageimages|description|langlinks',
+    piprop: 'thumbnail', pithumbsize: '600', pilicense: 'any', lllang: 'en', lllimit: '1', ...params })
+    .forEach(([k, v]) => u.searchParams.set(k, v));
+  const d = await getJSON(u.href);
+  return Object.values(d.query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
+}
+async function wikiSearch(q) {
+  const [es, en] = await Promise.all([
+    wikiQuery('es', { generator: 'search', gsrsearch: `${q} película`, gsrlimit: '8' }).catch(() => []),
+    wikiQuery('en', { generator: 'search', gsrsearch: `${q} film`, gsrlimit: '8' }).catch(() => []),
+  ]);
+  const out = [];
+  const add = p => { const it = wikiItem(p); if (it) out.push(it); };
+  es.forEach(add);
+  // Artículos en español sin cartel: mirar su versión en inglés
+  const enTitles = es.filter(p => !p.thumbnail && p.langlinks?.[0]?.['*'] && FILM_RE.test((p.description || '') + p.title))
+    .map(p => p.langlinks[0]['*']).slice(0, 5);
+  if (enTitles.length) {
+    try {
+      (await wikiQuery('en', { titles: enTitles.join('|') })).forEach(p => {
+        const it = wikiItem(p);
+        if (it) {   // conservar el título en español
+          const orig = es.find(e => e.langlinks?.[0]?.['*'] === p.title);
+          if (orig) it.title = orig.title.replace(/\s*\([^)]*\)\s*$/, '');
+          out.push(it);
+        }
+      });
+    } catch {}
+  }
+  en.forEach(add);
+  return out.slice(0, 10);
+}
+
+let tmdbAuthError = false;
+async function searchMovies(q) {
+  tmdbAuthError = false;
+  const [a, b, c] = await Promise.all([
+    tmdbSearch(q).catch(e => { if (e.message === 'tmdb-auth') tmdbAuthError = true; return []; }),
+    wikiSearch(q).catch(() => []),
+    itunes(q, 'movie').then(r => r.length >= 3 ? r : itunes(q, 'movie', 'US').then(us => [...r, ...us])).catch(() => []),
+  ]);
+  const seen = new Set();
+  return [...a, ...b, ...c].filter(r => r.cover && !seen.has(r.cover) && seen.add(r.cover));
 }
 
 async function openLibrary(term) {
@@ -638,9 +775,13 @@ async function runOnlineSearch() {
   status.textContent = 'Buscando…';
   box.innerHTML = '';
   try {
-    lastResults = form.type === 'libro' ? await openLibrary(q) : await itunes(q, form.type === 'cd' ? 'album' : 'movie');
-    if (!lastResults.length) { status.textContent = 'Sin resultados. Prueba con otras palabras o pega la URL de una imagen.'; return; }
-    showResults(lastResults, 'Toca una portada para usarla.');
+    const isMovie = form.type === 'pelicula';
+    lastResults = form.type === 'libro' ? await openLibrary(q) : isMovie ? await searchMovies(q) : await itunes(q, 'album');
+    const hint = !isMovie ? '' : tmdbAuthError
+      ? ' La clave de TMDB no es válida: revísala en ⋯ → Portadas de películas.'
+      : !tmdbKey() ? ' Para encontrar casi todas, añade una clave gratuita de TMDB en ⋯ → Portadas de películas.' : '';
+    if (!lastResults.length) { status.textContent = 'Sin resultados. Prueba con el título original o con menos palabras.' + hint; return; }
+    showResults(lastResults, 'Toca una portada para usarla.' + hint);
   } catch {
     status.textContent = 'No se pudo conectar. Revisa la conexión o pega la URL de una imagen.';
   }
@@ -654,6 +795,11 @@ function pickResult(i, { keepOpen = false, quiet = false } = {}) {
   if (!$('#f-creator').value.trim() && r.creator) $('#f-creator').value = r.creator;
   if (!$('#f-year').value.trim() && r.year) $('#f-year').value = r.year;
   if (!$('#f-genre').value.trim() && r.genre) $('#f-genre').value = r.genre;
+  if (r.tmdb && !$('#f-creator').value.trim()) {
+    tmdbCreator(r.tmdb).then(name => {
+      if (name && !$('#f-creator').value.trim()) { $('#f-creator').value = name; updateCoverPreview(); }
+    }).catch(() => {});
+  }
   if (!keepOpen) $('#online').hidden = true;
   $$('#online-results .result').forEach(b => b.classList.toggle('picked', +b.dataset.i === i));
   updateCoverPreview();
@@ -667,6 +813,7 @@ function showResults(results, statusText) {
       <button type="button" class="result ${form.type === 'cd' ? 'sq' : ''}" data-i="${i}">
         <img src="${esc(r.cover)}" alt="" loading="lazy" onerror="this.closest('.result').remove()">
         <span>${esc(r.title)}${r.year ? ` (${r.year})` : ''}</span>
+        ${r.source ? `<small class="src">${esc(r.source)}</small>` : ''}
       </button>`).join('');
 }
 
@@ -702,7 +849,7 @@ const sameCode = (a, b) => !!a && !!b && a.replace(/^0+/, '') === b.replace(/^0+
    Usa el lector nativo del navegador (Chrome en Android) y, si no existe (iPhone),
    la librería ZXing en WebAssembly incluida en vendor/. */
 const scanner = { stream: null, detector: null, timer: null, resolve: null, busy: false };
-const SCAN_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
+const SCAN_FORMATS = ['ean_13'];   // los ISBN de los libros son códigos EAN-13 (978/979…)
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -768,7 +915,7 @@ function scanCode() {
       const v = $('#scan-video');
       v.srcObject = stream;
       await v.play().catch(() => {});
-      setScanHint('Apunta al código de barras. Se leerá solo.');
+      setScanHint('Apunta al código de barras del libro (ISBN). Se leerá solo.');
       scanLoop(det);
     } catch (e) {
       stopCamera();
@@ -789,7 +936,10 @@ function scanLoop(det) {
         const found = await det.detect(v);
         for (const b of found) {
           const code = normalizeCode(b.rawValue);
-          if (code) {
+          if (code && !isISBN(code)) {
+            setScanHint('Ese código no es de un libro. El escáner solo lee ISBN (empiezan por 978 o 979).');
+          }
+          if (code && isISBN(code)) {
             $('.scan-frame').classList.add('hit');
             navigator.vibrate?.(60);
             setTimeout(() => finishScan(code), 150);
@@ -805,10 +955,7 @@ function scanLoop(det) {
   tick();
 }
 
-/* ---------- Consulta de datos por código ----------
-   Libros (ISBN): Google Books → Open Library
-   Música (EAN/UPC): MusicBrainz + Cover Art Archive
-   Películas (EAN): UPCitemdb (nombre del producto) + iTunes (carátula, director, año) */
+/* ---------- Consulta de datos por ISBN: Google Books → Open Library ---------- */
 async function getJSON(url, opts) {
   const r = await fetch(url, opts);
   if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -847,79 +994,10 @@ async function lookupBook(isbn) {
   return out;
 }
 
-function mbFormat(f) {
-  if (/vinyl|12"|7"|10"/i.test(f || '')) return 'Vinilo';
-  if (/cassette/i.test(f || '')) return 'Casete';
-  return 'CD';
-}
-async function lookupMusic(code) {
-  const variants = new Set([code]);
-  if (code.length === 12) variants.add('0' + code);
-  if (code.length === 13 && code.startsWith('0')) variants.add(code.slice(1));
-  const q = [...variants].map(v => `barcode:${v}`).join(' OR ');
-  const d = await getJSON(`https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(q)}&fmt=json&limit=6`, { headers: { Accept: 'application/json' } });
-  return (d.releases || []).filter(r => (r.score ?? 100) >= 90).map(r => ({
-    title: r.title,
-    creator: (r['artist-credit'] || []).map(a => (a.name || a.artist?.name || '') + (a.joinphrase || '')).join('').trim(),
-    year: (r.date || '').slice(0, 4),
-    genre: '',
-    format: mbFormat(r.media?.[0]?.format),
-    cover: `https://coverartarchive.org/release/${r.id}/front-500`,
-  }));
-}
-
-function cleanProductTitle(t) {
-  return (t || '')
-    .replace(/[\[(][^\])]*[\])]/g, ' ')
-    .replace(/\b(4k|ultra\s*hd|uhd|blu-?ray|dvd|steelbook|digital|edici[oó]n|special|edition|widescreen|region\s*\d|pal|ntsc|\d+\s*discs?|combo|pack|vinyl|vinilo|lp|cd|cassette)\b/gi, ' ')
-    .replace(/\s*[-–:,+\/]\s*$/g, '')
-    .replace(/\s{2,}/g, ' ').trim();
-}
-function productFormat(t) {
-  if (/4k|ultra\s*hd|uhd/i.test(t)) return { type: 'pelicula', format: '4K UHD' };
-  if (/blu-?ray/i.test(t)) return { type: 'pelicula', format: 'Blu-ray' };
-  if (/dvd/i.test(t)) return { type: 'pelicula', format: 'DVD' };
-  if (/vinyl|vinilo|\blp\b/i.test(t)) return { type: 'cd', format: 'Vinilo' };
-  if (/cassette|casete/i.test(t)) return { type: 'cd', format: 'Casete' };
-  if (/\bcd\b|album/i.test(t)) return { type: 'cd', format: 'CD' };
-  return null;
-}
-async function lookupProduct(code) {
-  const d = await getJSON(`https://api.upcitemdb.com/prod/trial/lookup?upc=${code}`);
-  const it = (d.items || [])[0];
-  if (!it) return null;
-  return { title: it.title || '', images: (it.images || []).filter(u => /^https?:/.test(u)), kind: productFormat(`${it.title} ${it.category || ''}`) };
-}
-
-/** Busca datos de un código. typeHint: tipo elegido en el formulario (orienta el orden de búsqueda). */
-async function lookupByCode(code, typeHint) {
-  if (isISBN(code)) {
-    const c = await lookupBook(code);
-    return { type: 'libro', format: '', candidates: c, source: 'Google Books / Open Library' };
-  }
-  const tryMusic = async () => {
-    try { const c = await lookupMusic(code); if (c.length) return { type: 'cd', format: c[0].format, candidates: c, source: 'MusicBrainz' }; } catch {}
-    return null;
-  };
-  const tryProduct = async () => {
-    let p;
-    try { p = await lookupProduct(code); } catch { return null; }
-    if (!p || !p.title) return null;
-    const kind = p.kind || { type: typeHint === 'cd' ? 'cd' : 'pelicula', format: typeHint === 'cd' ? 'CD' : 'DVD' };
-    const clean = cleanProductTitle(p.title) || p.title;
-    let cands = [];
-    try { cands = await itunes(clean, kind.type === 'cd' ? 'album' : 'movie'); } catch {}
-    cands = cands.slice(0, 6);
-    // El título del producto manda; iTunes aporta carátula, director/artista, año y género
-    const base = cands[0] ? { ...cands[0] } : { title: clean, creator: '', year: '', genre: '' };
-    if (cands[0] && norm(cands[0].title) !== norm(clean)) base.title = clean;
-    const extra = p.images.slice(0, 3).map(u => ({ ...base, cover: u }));
-    const list = cands.length ? [{ ...base, cover: cands[0].cover }, ...cands.slice(1), ...extra] : extra.length ? extra : [{ ...base, cover: '' }];
-    return { type: kind.type, format: kind.format, candidates: list, source: cands.length ? 'UPCitemdb + iTunes' : 'UPCitemdb' };
-  };
-  const order = typeHint === 'pelicula' ? [tryProduct, tryMusic] : [tryMusic, tryProduct];
-  for (const fn of order) { const r = await fn(); if (r) return r; }
-  return { type: typeHint, format: '', candidates: [], source: '' };
+/** Busca los datos de un libro por su ISBN (el escáner solo se usa para libros). */
+async function lookupByCode(code) {
+  const c = await lookupBook(code);
+  return { type: 'libro', format: '', candidates: c, source: 'Google Books / Open Library' };
 }
 
 /** Rellena el formulario a partir de un código (escaneado o escrito). */
@@ -937,7 +1015,7 @@ async function fillFromCode(code, preset = null) {
   $('#online').hidden = false;
   $('#online-results').innerHTML = '';
   $('#online-status').textContent = 'Buscando datos del código…';
-  const r = preset || await lookupByCode(code, form.type);
+  const r = preset || await lookupByCode(code);
   if (!$('#dlg-form').open) return;
   if (!r.candidates.length) {
     $('#online-status').textContent = 'No he encontrado datos para este código. Escribe el título y pulsa «Buscar portada».';
@@ -975,7 +1053,7 @@ async function scanFromSearch() {
     return;
   }
   toast('No está en tu biblioteca. Buscando datos…', { duration: 0 });
-  const r = await lookupByCode(code, null);
+  const r = await lookupByCode(code);
   $('#toast').classList.remove('show');
   const first = r.candidates[0];
   if (first) {
@@ -999,13 +1077,37 @@ async function scanFromSearch() {
     title: 'No lo tienes',
     text: first
       ? `«${first.title}»${first.creator ? ` de ${first.creator}` : ''} no está en tu biblioteca. ¿Quieres añadirlo?`
-      : `El código ${code} no está en tu biblioteca y no he encontrado sus datos. ¿Quieres añadirlo escribiendo el título?`,
+      : `El ISBN ${code} no está en tu biblioteca y no he encontrado sus datos. ¿Quieres añadirlo escribiendo el título?`,
     ok: 'Añadir', cancel: 'Cerrar',
   });
   if (!add) return;
   openForm();
   if (r.type) { form.type = r.type; updateFormType(); }
   fillFromCode(code, r);
+}
+
+/* ---------- Clave de TMDB ---------- */
+function renderTmdbPanel() {
+  const has = !!tmdbKey();
+  $('#tmdb-key').value = '';
+  $('#tmdb-key').placeholder = has ? 'Clave guardada ••••••' : 'Clave de API o token';
+  $('#tmdb-remove').hidden = !has;
+  $('#tmdb-status').textContent = has ? 'Activado: las películas se buscan también en TMDB.' : '';
+}
+async function saveTmdbKey() {
+  const key = $('#tmdb-key').value.trim();
+  const st = $('#tmdb-status');
+  if (!key) { st.textContent = 'Pega la clave de API o el token de lectura de TMDB.'; return; }
+  st.textContent = 'Comprobando…';
+  try {
+    await tmdbFetch('/configuration', {}, key);
+    localStorage.setItem('mb-tmdb', key);
+    tmdbGenres = null;
+    renderTmdbPanel();
+    toast('Clave de TMDB guardada');
+  } catch (e) {
+    st.textContent = e.message === 'tmdb-auth' ? 'TMDB no acepta esa clave. Copia la «Clave de la API» o el «Token de acceso de lectura».' : 'No se pudo comprobar (¿sin conexión?). Inténtalo de nuevo.';
+  }
 }
 
 /* ---------- Copia de seguridad ---------- */
@@ -1456,12 +1558,12 @@ function bind() {
   $('#scan-manual').addEventListener('submit', e => {
     e.preventDefault();
     const code = normalizeCode($('#scan-input').value);
-    if (!code) { setScanHint('Ese código no es válido. Revisa los números.'); return; }
+    if (!code || !isISBN(code)) { setScanHint('Ese ISBN no es válido. Revisa los números (10 o 13 cifras).'); return; }
     finishScan(code);
   });
   $('#f-code-lookup').addEventListener('click', () => {
     const code = normalizeCode($('#f-code').value);
-    if (!code) { toast('Escribe un ISBN o código de barras válido'); return; }
+    if (!code || !isISBN(code)) { toast('Escribe un ISBN válido (10 o 13 cifras)'); return; }
     fillFromCode(code);
   });
   $('#online-q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runOnlineSearch(); } });
@@ -1470,7 +1572,9 @@ function bind() {
   });
 
   // Menú
-  $('#btn-menu').addEventListener('click', () => { setSegmented($('#sort'), state.sort); updateStats(); renderSyncPanel(); $('#dlg-menu').showModal(); });
+  $('#btn-menu').addEventListener('click', () => { setSegmented($('#sort'), state.sort); updateStats(); renderSyncPanel(); renderTmdbPanel(); $('#dlg-menu').showModal(); });
+  $('#tmdb-save').addEventListener('click', saveTmdbKey);
+  $('#tmdb-remove').addEventListener('click', () => { localStorage.removeItem('mb-tmdb'); renderTmdbPanel(); toast('Clave de TMDB eliminada'); });
   $('#sort').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     state.sort = b.dataset.value;

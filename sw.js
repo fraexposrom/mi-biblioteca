@@ -1,6 +1,6 @@
 // Service worker: permite usar la app sin conexión.
 // Sube el número de versión cada vez que cambies algún archivo de la app.
-const VERSION = 'mb-v4';
+const VERSION = 'mb-v5';
 const SHELL = [
   './',
   'index.html',

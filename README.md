@@ -22,9 +22,9 @@ App web para registrar mis libros, música (CD, vinilo, casete) y películas (DV
   - Libro
   - Música: CD, Vinilo o Casete
   - Película: DVD, Blu-ray, 4K UHD o Grabada
-- **Escanear código de barras:** en *Añadir*, pulsa *Escanear código de barras* y apunta la cámara al código (ISBN en libros, EAN en discos y películas). La app rellena título, autor/artista/director, año, formato y portada. También puedes escribir el código en el campo *ISBN / código de barras* y pulsar *Buscar datos*.
-- **¿Ya lo tengo?** En la lupa, el botón del código de barras escanea un producto (por ejemplo, en una tienda): si está en tu biblioteca abre su ficha; si no, te ofrece añadirlo con los datos ya rellenados. Si lo tienes guardado sin código, te pregunta si es el mismo y le añade el código.
-- **Portada:** búscala desde la app (libros en Open Library, música y películas en iTunes) o pega la URL de una imagen de internet (mantén pulsada la imagen en el navegador → *Copiar dirección de la imagen*). La app comprueba que la imagen carga. Si no hay portada, genera una con el título.
+- **Escanear ISBN (solo libros):** en *Añadir* con el tipo *Libro*, pulsa *Escanear ISBN del libro* y apunta la cámara al código de barras de la contraportada. La app rellena título, autor, año, género y portada. También puedes escribir el ISBN y pulsar *Buscar datos*. En Música y Películas no aparece el escáner.
+- **¿Ya lo tengo?** En la lupa, el botón del código de barras escanea el ISBN de un libro (por ejemplo, en una librería): si está en tu biblioteca abre su ficha; si no, te ofrece añadirlo con los datos ya rellenados.
+- **Portada:** búscala desde la app (libros en Open Library; música en iTunes; películas en TMDB, Wikipedia e iTunes a la vez, indicando de dónde sale cada una) o pega la URL de una imagen de internet (mantén pulsada la imagen en el navegador → *Copiar dirección de la imagen*). La app comprueba que la imagen carga. Si no hay portada, genera una con el título.
 - **Ubicación:** dónde está guardado (p. ej. «Salón, estantería 2»). La app te sugiere las ubicaciones que ya usaste.
 - **Duplicados:** si añades algo que ya tienes (mismo tipo y título), la app te avisa antes de guardar.
 - **Préstamos:** en la ficha de un elemento, *Prestar* → a quién y desde cuándo. La portada muestra una cinta amarilla «Prestado · nombre», y el filtro **Prestados** reúne todo lo que tienes prestado. *Devuelto* lo guarda en el historial de préstamos.
@@ -34,17 +34,30 @@ App web para registrar mis libros, música (CD, vinilo, casete) y películas (DV
 - **Lupa:** busca por título, autor, artista, género, año, ubicación, notas o persona a la que lo prestaste.
 - **Menú ⋯:** ordenar, copia de seguridad, sincronización con GitHub y resumen de la colección.
 
-## De dónde salen los datos al escanear
+## De dónde salen los datos y las portadas
 
-| Tipo | Servicio | Cobertura |
-|---|---|---|
-| Libros (ISBN) | Google Books y Open Library | Muy buena, también ediciones españolas |
-| Música: CD, vinilo, casete | MusicBrainz + Cover Art Archive | Buena en CD y vinilo, menor en casete |
-| Películas (EAN) | UPCitemdb (nombre del producto) + iTunes (carátula, director, año) | Irregular. UPCitemdb gratis permite unas 100 consultas al día |
+| Qué | Servicios |
+|---|---|
+| Libros por ISBN (escáner) | Google Books y Open Library |
+| Portadas de libros por título | Open Library |
+| Portadas de música | iTunes |
+| Portadas de películas y series | TMDB (si pones tu clave), Wikipedia en español e inglés, e iTunes (España y, si hay pocos resultados, EE. UU.) |
 
-Todos son gratuitos y no necesitan registro. Si un código no aparece, la app lo guarda igualmente y escribes el título a mano. Así la comprobación «¿ya lo tengo?» funcionará la próxima vez.
+La lectura del código de barras se hace en el propio móvil: Chrome en Android usa su lector integrado y en iPhone se usa la librería ZXing incluida en la carpeta `vendor/` (funciona sin conexión). La primera vez el navegador pedirá permiso para usar la cámara.
 
-La lectura del código se hace en el propio móvil: Chrome en Android usa su lector integrado y en iPhone se usa la librería ZXing incluida en la carpeta `vendor/` (funciona sin conexión). La primera vez el navegador pedirá permiso para usar la cámara.
+### Clave gratuita de TMDB (recomendada para películas)
+
+TMDB (The Movie Database) tiene el cartel de casi cualquier película o serie, a menudo en español. Su uso es gratuito para fines personales, pero pide una clave:
+
+1. Crea una cuenta en [themoviedb.org](https://www.themoviedb.org/signup) y confirma tu correo.
+2. Ve a tu avatar → **Ajustes** → **API** → **Solicitar una clave de API**. Elige **Developer** (uso personal) y acepta las condiciones.
+3. Rellena el formulario: tipo de uso personal; como URL de la aplicación puedes poner la de tu app (`https://TU-USUARIO.github.io/mi-biblioteca/`).
+4. En esa misma página aparecerán la **Clave de la API** y el **Token de acceso de lectura**. Copia cualquiera de los dos.
+5. En la app: **⋯ → Portadas de películas**, pega la clave y pulsa **Guardar**. La app comprueba que funciona.
+
+La clave se guarda solo en ese dispositivo: si usas la app en varios, pégala en cada uno.
+
+> Este producto usa la API de TMDB, pero no está avalado ni certificado por TMDB.
 
 ## Tus datos: sincronización con GitHub
 
@@ -88,7 +101,7 @@ El token se guarda solo en el navegador de cada dispositivo y únicamente da acc
 
 ## Actualizar la app
 
-Si cambias algún archivo, sube en `sw.js` el valor de `VERSION` (p. ej. de `mb-v4` a `mb-v5`). Al abrir la app, los móviles mostrarán «Hay una nueva versión de la app · Actualizar».
+Si cambias algún archivo, sube en `sw.js` el valor de `VERSION` (p. ej. de `mb-v5` a `mb-v6`). Al abrir la app, los móviles mostrarán «Hay una nueva versión de la app · Actualizar».
 
 ## Archivos
 
@@ -100,4 +113,4 @@ Si cambias algún archivo, sube en `sw.js` el valor de `VERSION` (p. ej. de `mb-
 | `sw.js` | Funcionamiento sin conexión |
 | `manifest.webmanifest` | Nombre e icono al instalarla |
 | `icons/` | Logo e iconos |
-| `vendor/` | Lector de códigos de barras para iPhone (barcode-detector + ZXing, licencia MIT) |
+| `vendor/` | Lector de ISBN para iPhone (barcode-detector + ZXing, licencia MIT) |
