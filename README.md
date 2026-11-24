@@ -1,6 +1,6 @@
 # Mi Biblioteca
 
-App web para registrar mis libros, música (CD, vinilo, casete) y películas (DVD, Blu-ray, 4K UHD, grabadas), con vista de portadas o lista compacta, filtros, préstamos y ubicación. Funciona en el móvil, se puede instalar en la pantalla de inicio y sigue funcionando sin conexión.
+App web para registrar mis libros, música (CD, vinilo, casete), cine y series (DVD, Blu-ray, 4K UHD, grabadas) y juegos de mesa, con vista de portadas o lista compacta, filtros, préstamos y ubicación. Funciona en el móvil, se puede instalar en la pantalla de inicio y sigue funcionando sin conexión.
 
 ## Publicar en GitHub Pages
 
@@ -18,21 +18,26 @@ App web para registrar mis libros, música (CD, vinilo, casete) y películas (DV
 
 ## Uso
 
-- **+** para añadir. Elige tipo y formato:
+- **Apartados:** en la barra inferior tienes *Libros*, *Música*, *Cine y series* y *Juegos*, con el botón **+** en el centro para añadir (se abre ya con el apartado en el que estés). Para ver toda la biblioteca junta, toca el logo «Mi Biblioteca» o vuelve a tocar el apartado activo.
+- **+** para añadir. Elige el tipo y, en música y cine, el **Formato** en su desplegable:
   - Libro
   - Música: CD, Vinilo o Casete
-  - Película: DVD, Blu-ray, 4K UHD o Grabada
+  - Cine y series: elige en *¿Película o serie?* y el formato (DVD, Blu-ray, 4K UHD o Grabada). En las series el campo *Director* pasa a llamarse *Creador* y aparece *Temporada(s)* (p. ej. «1–3» o «Completa»); distintas temporadas de una misma serie no se avisan como duplicadas.
 - **Escanear ISBN (solo libros):** en *Añadir* con el tipo *Libro*, pulsa *Escanear ISBN del libro* y apunta la cámara al código de barras de la contraportada. La app rellena título, autor, año, género y portada. También puedes escribir el ISBN y pulsar *Buscar datos*. En Música y Películas no aparece el escáner.
 - **¿Ya lo tengo?** En la lupa, el botón del código de barras escanea el ISBN de un libro (por ejemplo, en una librería): si está en tu biblioteca abre su ficha; si no, te ofrece añadirlo con los datos ya rellenados.
+- **Juegos de mesa:** al elegir *Juego*, la ficha pide título, editorial, jugadores (de… a…), duración en minutos, edad mínima y descripción, además de precio/regalo y ubicación. La portada se pone con *Pegar URL de imagen* (por ejemplo, copiando la imagen de la caja desde la web de la tienda o la editorial). En el apartado Juegos hay un desplegable *Jugadores*: al elegir «5» verás los juegos que admiten 5 personas («6 o más» para grupos grandes).
 - **Portada:** búscala desde la app (libros en Open Library; música en iTunes; películas en TMDB, Wikipedia e iTunes a la vez, indicando de dónde sale cada una) o pega la URL de una imagen de internet (mantén pulsada la imagen en el navegador → *Copiar dirección de la imagen*). La app comprueba que la imagen carga. Si no hay portada, genera una con el título.
 - **Ubicación:** dónde está guardado (p. ej. «Salón, estantería 2»). La app te sugiere las ubicaciones que ya usaste.
 - **Duplicados:** si añades algo que ya tienes (mismo tipo y título), la app te avisa antes de guardar.
-- **Leído / visto:** en libros y películas, pulsa *Marcar como leído* (o *Marcar como vista*) en la ficha, o marca la casilla «Ya lo he leído» / «Ya la he visto» al añadir o editar. Las portadas muestran una marca verde. Debajo de los filtros tienes *Por leer* / *Leídos* en Libros, *Por ver* / *Vistas* en Películas y *Pendientes* / *Leídos y vistos* en Todo (tócalo otra vez para quitar el filtro). En el menú ⋯ verás cuántos llevas.
-- **Préstamos:** en la ficha de un elemento, *Prestar* → a quién y desde cuándo. La portada muestra una cinta amarilla «Prestado · nombre», y el filtro **Prestados** reúne todo lo que tienes prestado. *Devuelto* lo guarda en el historial de préstamos.
+- **Leído / visto:** en libros y películas, pulsa *Marcar como leído* (o *Marcar como vista*) en la ficha, o marca la casilla «Ya lo he leído» / «Ya la he visto» al añadir o editar. Las portadas muestran una marca verde. Debajo de los filtros tienes *Por leer* / *Leídos* en Libros, *Por ver* / *Vistas* en Cine y series y *Pendientes* / *Leídos y vistos* en Todo (tócalo otra vez para quitar el filtro). En el menú ⋯ verás cuántos llevas.
+- **Precio y regalos:** al añadir o editar puedes apuntar lo que pagaste (p. ej. 18,90). Si fue un regalo, marca *Me lo regalaron* y, si quieres, de quién; entonces no se pide precio. La ficha muestra el precio o «Regalo de…», y al entrar en Libros, Música o Películas verás el total gastado en ese apartado y sus regalos (nunca se suman apartados distintos; en el menú ⋯ aparece el desglose por apartado). La búsqueda también encuentra por «regalo» o por el nombre de quien te lo regaló.
+- **Préstamos:** en la ficha de un elemento, *Prestar* → a quién y desde cuándo. La portada muestra una cinta amarilla «Prestado · nombre», y el filtro **Prestados** (en la fila de filtros) reúne lo que tienes prestado en el apartado actual. *Devuelto* lo guarda en el historial de préstamos.
 - **Borrar:** se borra al momento y tienes unos segundos para pulsar *Deshacer*.
-- **Filtros:** Todo, Libros, Música, Películas y, dentro de Música y Películas, por formato. La app recuerda el último filtro.
+- **Filtros:** dentro de cada apartado (la pantalla principal no tiene filtros), debajo de la cabecera: formato (Música y Cine y series), *Ver: Todo / Películas / Series* (Cine y series), *Jugadores* (Juegos), leído/visto y *Prestados*. La app recuerda el último apartado.
 - **Vista:** el botón de la cabecera cambia entre portadas y lista compacta (con formato, préstamo y ubicación a la vista).
 - **Lupa:** busca por título, autor, artista, género, año, ubicación, notas o persona a la que lo prestaste.
+- **Ordenar por título** ignora los artículos iniciales («El», «La», «Los», «Un», «The»…): *El laberinto del fauno* se ordena en la L.
+- **Inventario para Excel:** *⋯ → Exportar inventario (Excel)* descarga un archivo `.csv` con todo (apartado, tipo, título, autor, año, formato, temporadas, ISBN, datos de juegos, ubicación, precio, regalos, leído, préstamos, notas…). Se abre directamente en Excel o Numbers; en el móvil se abre el menú de compartir para guardarlo en Archivos o enviarlo por correo.
 - **Menú ⋯:** ordenar, copia de seguridad, sincronización con GitHub y resumen de la colección.
 
 ## De dónde salen los datos y las portadas
@@ -42,7 +47,7 @@ App web para registrar mis libros, música (CD, vinilo, casete) y películas (DV
 | Libros por ISBN (escáner) | Google Books y Open Library |
 | Portadas de libros por título | Open Library |
 | Portadas de música | iTunes |
-| Portadas de películas y series | TMDB (si pones tu clave), Wikipedia en español e inglés, e iTunes (España y, si hay pocos resultados, EE. UU.) |
+| Portadas de cine y series | TMDB (si pones tu clave), Wikipedia en español e inglés, e iTunes (España y, si hay pocos resultados, EE. UU.) |
 
 La lectura del código de barras se hace en el propio móvil: Chrome en Android usa su lector integrado y en iPhone se usa la librería ZXing incluida en la carpeta `vendor/` (funciona sin conexión). La primera vez el navegador pedirá permiso para usar la cámara.
 
@@ -54,7 +59,7 @@ TMDB (The Movie Database) tiene el cartel de casi cualquier película o serie, a
 2. Ve a tu avatar → **Ajustes** → **API** → **Solicitar una clave de API**. Elige **Developer** (uso personal) y acepta las condiciones.
 3. Rellena el formulario: tipo de uso personal; como URL de la aplicación puedes poner la de tu app (`https://TU-USUARIO.github.io/mi-biblioteca/`).
 4. En esa misma página aparecerán la **Clave de la API** y el **Token de acceso de lectura**. Copia cualquiera de los dos.
-5. En la app: **⋯ → Portadas de películas**, pega la clave y pulsa **Guardar**. La app comprueba que funciona.
+5. En la app: **⋯ → Portadas de cine y series**, pega la clave y pulsa **Guardar**. La app comprueba que funciona.
 
 La clave se guarda solo en ese dispositivo: si usas la app en varios, pégala en cada uno.
 
@@ -102,7 +107,7 @@ El token se guarda solo en el navegador de cada dispositivo y únicamente da acc
 
 ## Actualizar la app
 
-Si cambias algún archivo, sube en `sw.js` el valor de `VERSION` (p. ej. de `mb-v7` a `mb-v8`). Al abrir la app, los móviles mostrarán «Hay una nueva versión de la app · Actualizar».
+Si cambias algún archivo, sube en `sw.js` el valor de `VERSION` (p. ej. de `mb-v13` a `mb-v14`). Al abrir la app, los móviles mostrarán «Hay una nueva versión de la app · Actualizar».
 
 ## Archivos
 

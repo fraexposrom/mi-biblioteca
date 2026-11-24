@@ -8,19 +8,21 @@
 const TYPES = {
   libro:    { label: 'Libro',    creator: 'Autor',    icon: 'i-book' },
   cd:       { label: 'Música',   creator: 'Artista',  icon: 'i-disc' },
-  pelicula: { label: 'Película', creator: 'Director', icon: 'i-film' },
+  pelicula: { label: 'Cine y series', creator: 'Director', icon: 'i-film' },
+  juego:    { label: 'Juego',    creator: 'Editorial', icon: 'i-dice' },
 };
 const FORMATS = {
   libro: [],
   cd: ['CD', 'Vinilo', 'Casete'],
   pelicula: ['DVD', 'Blu-ray', '4K UHD', 'Grabada'],
+  juego: [],
 };
 // Proporción (ancho/alto) por defecto de cada formato, para que el hueco se parezca al objeto real
-const DEFAULT_AR = { libro: 2 / 3, CD: 1, Vinilo: 1, Casete: 0.64, DVD: 0.7, 'Blu-ray': 0.8, '4K UHD': 0.8, Grabada: 0.7 };
+const DEFAULT_AR = { libro: 2 / 3, juego: 1, CD: 1, Vinilo: 1, Casete: 0.64, DVD: 0.7, 'Blu-ray': 0.8, '4K UHD': 0.8, Grabada: 0.7 };
 // Leído / visto (solo libros y películas)
 const SEEN = {
   libro:    { done: 'Leído', mark: 'Marcar como leído', pend: 'Por leer', many: 'Leídos', ask: 'Ya lo he leído', verb: 'leído' },
-  pelicula: { done: 'Vista', mark: 'Marcar como vista', pend: 'Por ver',  many: 'Vistas', ask: 'Ya la he visto', verb: 'vista' },
+  pelicula: { done: 'Vista', mark: 'Marcar como vista', pend: 'Por ver',  many: 'Vistas', ask: 'Ya la he visto', verb: 'vista' },  // película o serie
 };
 const canSee = i => !!SEEN[i.type];
 const FORMAT_ICON = { CD: 'i-disc', Vinilo: 'i-vinyl', Casete: 'i-cassette' };
@@ -28,6 +30,7 @@ const PH_COLORS = {
   libro: ['#3F3566', '#5B4B8A', '#2E4A62', '#6B3E5E', '#2F5D50'],
   cd: ['#2F6F8F', '#1F4E5F', '#3B7A57', '#4A4E8F', '#7A3E65'],
   pelicula: ['#B5543C', '#8C3B2E', '#5E3A2F', '#A0522D', '#3D3D4E'],
+  juego: ['#4F7A3A', '#7A5C2E', '#2F6B6B', '#8A4B2F', '#5A4B7A'],
 };
 
 /* ---------- Almacenamiento local (IndexedDB) ---------- */
@@ -68,6 +71,8 @@ const state = {
   format: 'all',
   loaned: false,
   seen: 'all',        // all | pending | done
+  players: 'all',     // juegos: all | 1..6 (6 = 6 o más)
+  kind: 'all',        // cine y series: all | pelicula | serie
   query: '',
   sort: localStorage.getItem('mb-sort') || 'recent',
   view: localStorage.getItem('mb-view') || 'grid',
@@ -85,6 +90,58 @@ const esc = s => (s ?? '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', 
 const today = () => new Date().toISOString().slice(0, 10);
 const fmtDate = iso => iso ? new Date(iso + (iso.length === 10 ? 'T12:00:00' : '')).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 function hash(str) { let h = 0; for (const ch of str || '') h = (h * 31 + ch.charCodeAt(0)) | 0; return Math.abs(h); }
+const fmtPrice = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n);
+/** Convierte «18,90», «18.90» o «1.234,50» en número; '' → null; texto no válido → NaN. */
+function parsePrice(raw) {
+  let t = (raw || '').toString().replace(/[€\s]/g, '');
+  if (!t) return null;
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');   // formato español
+  if (!/^\d+(\.\d{1,2})?$/.test(t)) return NaN;
+  return Math.round(parseFloat(t) * 100) / 100;
+}
+const priceInput = n => n == null ? '' : String(n.toFixed(2)).replace('.', ',');
+const SECTION_NAME = { libro: 'libros', cd: 'música', pelicula: 'cine y series', juego: 'juegos' };
+const SECTION_LABEL = { libro: 'Libros', cd: 'Música', pelicula: 'Cine y series', juego: 'Juegos' };
+const kindOf = i => i.kind === 'serie' ? 'serie' : 'pelicula';
+const kindLabel = i => kindOf(i) === 'serie' ? 'Serie' : 'Película';
+const TYPE_ORDER = ['libro', 'cd', 'pelicula', 'juego'];
+/** Gasto y regalos de un apartado (nunca se suman apartados distintos). */
+function sectionMoney(type) {
+  const items = state.items.filter(i => i.type === type);
+  const priced = items.filter(i => !i.gift && i.price != null);
+  return {
+    total: priced.reduce((a, i) => a + i.price, 0),
+    priced: priced.length,
+    gifts: items.filter(i => i.gift).length,
+  };
+}
+
+/** Nombres ya usados en préstamos y regalos (para sugerirlos). */
+function knownPeople() {
+  return [...new Set(state.items.flatMap(i => [i.loan?.to, i.giftFrom, ...(i.loanHistory || []).map(h => h.to)]).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'es'));
+}
+/** «2–4», «2», «2+» o '' según los jugadores guardados. */
+function playersText(i) {
+  const a = i.playersMin, b = i.playersMax;
+  if (a == null && b == null) return '';
+  if (a != null && b != null) return a === b ? `${a}` : `${a}–${b}`;
+  return a != null ? `${a}+` : `hasta ${b}`;
+}
+/** ¿Se puede jugar con n personas? (n = 6 significa «6 o más») */
+function fitsPlayers(i, n) {
+  const lo = i.playersMin ?? i.playersMax, hi = i.playersMax ?? i.playersMin;
+  if (lo == null) return false;
+  if (i.playersMax == null && i.playersMin != null && n >= lo) return true;   // «2+»: sin máximo
+  return n >= 6 ? hi >= 6 : lo <= n && n <= hi;
+}
+/** Clave de orden: sin artículo inicial («El laberinto…» se ordena por «laberinto…»). */
+const ARTICLES = /^(el|la|los|las|lo|un|una|unos|unas|the|an|les|le|il|gli)\s+/i;
+const titleKey = t => {
+  const s = (t || '').trim().replace(/^[¿¡"«'(\[]+/, '');
+  const k = s.replace(/^l'/i, '').replace(ARTICLES, '');
+  return k || s;      // un título que es solo un artículo («Él») se queda igual
+};
 function plural(n, one, many) { return `${n} ${n === 1 ? one : many}`; }
 function daysSince(iso) { return Math.max(0, Math.round((Date.now() - new Date(iso + 'T12:00:00')) / 864e5)); }
 function agoText(iso) {
@@ -101,7 +158,7 @@ function fmtOf(item) {
   if (item.type === 'pelicula') return FORMATS.pelicula.includes(item.format) ? item.format : 'DVD';
   return '';
 }
-function typeLabel(item) { return item.type === 'libro' ? 'Libro' : fmtOf(item); }
+function typeLabel(item) { return FORMATS[item.type].length ? fmtOf(item) : TYPES[item.type].label; }
 
 /* ---------- Aviso breve (con acción opcional) ---------- */
 function toast(msg, { action, onAction, duration = 2600 } = {}) {
@@ -167,10 +224,13 @@ function rememberRatio(url, ar) {
   clearTimeout(arSaveTimer);
   arSaveTimer = setTimeout(() => { try { localStorage.setItem('mb-ar', JSON.stringify(arCache)); } catch {} }, 800);
 }
-function coverStyle(ar) {
-  const w = ar >= 2 / 3 ? 100 : Math.round(ar * 150 * 10) / 10;   // nunca más alto que el hueco 2:3
+/** Tamaño de la portada dentro de su hueco (2:3 normalmente; cuadrado en juegos). */
+function coverStyle(ar, slot = 2 / 3) {
+  const w = ar >= slot ? 100 : Math.round((ar / slot) * 1000) / 10;   // nunca más alta que el hueco
   return `width:${w}%;aspect-ratio:${ar}`;
 }
+/** Huecos cuadrados cuando solo se ven juegos (sus cajas son cuadradas). */
+const slotFor = type => type === 'juego' ? 1 : 2 / 3;
 function phColor(item) {
   const list = PH_COLORS[item.type];
   return list[hash(item.title) % list.length];
@@ -182,9 +242,9 @@ function placeholderHTML(item, hidden = false) {
       <div><b>${esc(item.title)}</b>${item.creator ? `<br><small>${esc(item.creator)}</small>` : ''}</div>
     </div>`;
 }
-function coverHTML(item, { lazy = true } = {}) {
+function coverHTML(item, { lazy = true, slot = 2 / 3 } = {}) {
   const f = fmtOf(item);
-  const def = DEFAULT_AR[f] || DEFAULT_AR.libro;
+  const def = DEFAULT_AR[f] || DEFAULT_AR[item.type] || DEFAULT_AR.libro;
   const ar = (item.cover && arCache[item.cover]) || def;
   const showBadge = item.type === 'pelicula' || (item.type === 'cd' && f !== 'CD');
   const badge = showBadge ? `<span class="badge f-${f.split(' ')[0]}">${esc(f.toUpperCase())}</span>` : '';
@@ -193,7 +253,7 @@ function coverHTML(item, { lazy = true } = {}) {
   const img = item.cover
     ? `<img src="${esc(item.cover)}" alt="" ${lazy ? 'loading="lazy"' : ''} onload="coverLoaded(this)" onerror="coverFailed(this)">`
     : '';
-  return `<div class="cover-box"><div class="cover" data-def="${def}" style="${coverStyle(ar)}">${img}${placeholderHTML(item, !!item.cover)}${badge}${seen}${loan}</div></div>`;
+  return `<div class="cover-box${slot === 1 ? ' sq' : ''}"><div class="cover" data-def="${def}" data-slot="${slot}" style="${coverStyle(ar, slot)}">${img}${placeholderHTML(item, !!item.cover)}${badge}${seen}${loan}</div></div>`;
 }
 /** Ajusta el hueco a la proporción real de la imagen descargada. */
 window.coverLoaded = img => {
@@ -201,12 +261,12 @@ window.coverLoaded = img => {
   if (!ar || !isFinite(ar)) return;
   const clamped = Math.min(Math.max(ar, 0.45), 1.6);
   rememberRatio(img.getAttribute('src'), clamped);
-  img.parentNode.setAttribute('style', coverStyle(clamped));
+  img.parentNode.setAttribute('style', coverStyle(clamped, +img.parentNode.dataset.slot || 2 / 3));
 };
 /** Si una portada no carga (sin conexión, enlace roto), muestra la portada generada. */
 window.coverFailed = img => {
   const c = img.parentNode;
-  c.setAttribute('style', coverStyle(+c.dataset.def));
+  c.setAttribute('style', coverStyle(+c.dataset.def, +c.dataset.slot || 2 / 3));
   c.querySelector('.placeholder')?.removeAttribute('hidden');
   img.remove();
 };
@@ -218,31 +278,45 @@ function filtered() {
     (state.type === 'all' || i.type === state.type) &&
     (state.format === 'all' || fmtOf(i) === state.format) &&
     (!state.loaned || i.loan) &&
+    (state.kind === 'all' || (i.type === 'pelicula' && kindOf(i) === state.kind)) &&
+    (state.players === 'all' || (i.type === 'juego' && fitsPlayers(i, +state.players))) &&
     (state.seen === 'all' || (canSee(i) && (state.seen === 'done' ? !!i.seen : !i.seen))) &&
-    (!q || norm(`${i.title} ${i.creator} ${i.genre} ${i.year} ${i.notes} ${i.location} ${i.loan?.to || ''} ${fmtOf(i)} ${i.code || ''}`).includes(q))
+    (!q || norm(`${i.title} ${i.creator} ${i.genre} ${i.year} ${i.notes} ${i.location} ${i.loan?.to || ''} ${fmtOf(i)} ${i.code || ''} ${i.gift ? 'regalo ' + (i.giftFrom || '') : ''} ${i.type === 'pelicula' ? kindLabel(i) : ''} ${i.seasons || ''}`).includes(q))
   );
   const cmp = (a, b) => a.localeCompare(b, 'es', { sensitivity: 'base', numeric: true });
+  const byTitle = (a, b) => cmp(titleKey(a.title), titleKey(b.title)) || cmp(a.title, b.title);
   const by = {
     recent: (a, b) => (b.createdAt || 0) - (a.createdAt || 0),
-    title: (a, b) => cmp(a.title, b.title),
-    creator: (a, b) => cmp(a.creator || '￿', b.creator || '￿') || cmp(a.title, b.title),
-    year: (a, b) => (parseInt(b.year) || 0) - (parseInt(a.year) || 0) || cmp(a.title, b.title),
+    title: byTitle,
+    creator: (a, b) => cmp(a.creator || '￿', b.creator || '￿') || byTitle(a, b),
+    year: (a, b) => (parseInt(b.year) || 0) - (parseInt(a.year) || 0) || byTitle(a, b),
   }[state.sort];
   return list.sort(by);
 }
 
 function cardHTML(i) {
   return `<button class="card" data-id="${i.id}">
-      ${coverHTML(i)}
+      ${coverHTML(i, { slot: slotFor(state.type) })}
       <p class="t">${esc(i.title)}</p>
-      ${i.creator ? `<p class="c">${esc(i.creator)}</p>` : ''}
+      ${i.creator || i.seasons ? `<p class="c">${esc([i.creator, seasonsText(i)].filter(Boolean).join(' · '))}</p>` : ''}
     </button>`;
+}
+/** «Temp. 1–3» para series con temporadas indicadas. */
+function seasonsText(i) {
+  return i.type === 'pelicula' && kindOf(i) === 'serie' && i.seasons ? `Temp. ${i.seasons}` : '';
 }
 function rowHTML(i) {
   const sub = [i.creator, i.year].filter(Boolean).join(' · ');
   const tags = [`<span class="tag">${esc(typeLabel(i))}</span>`];
+  if (i.type === 'pelicula' && kindOf(i) === 'serie') tags.push(`<span class="tag">Serie${i.seasons ? ` · T. ${esc(i.seasons)}` : ''}</span>`);
+  if (i.type === 'juego') {
+    if (playersText(i)) tags.push(`<span class="tag">${esc(playersText(i))} jug.</span>`);
+    if (i.duration) tags.push(`<span class="tag">${i.duration} min</span>`);
+    if (i.age) tags.push(`<span class="tag">+${i.age}</span>`);
+  }
   if (canSee(i) && i.seen) tags.push(`<span class="tag seen"><svg><use href="#i-check"/></svg>${SEEN[i.type].done}</span>`);
   if (i.loan) tags.push(`<span class="tag loan">Prestado · ${esc(i.loan.to)}</span>`);
+  if (i.gift) tags.push(`<span class="tag gift"><svg><use href="#i-gift"/></svg>${i.giftFrom ? `Regalo de ${esc(i.giftFrom)}` : 'Regalo'}</span>`);
   if (i.location) tags.push(`<span class="tag"><svg><use href="#i-pin"/></svg>${esc(i.location)}</span>`);
   return `<button class="row" data-id="${i.id}">
       ${coverHTML(i)}
@@ -254,59 +328,91 @@ function rowHTML(i) {
     </button>`;
 }
 
+function selectHTML(name, label, value, options) {
+  return `<label class="chip-select${value !== 'all' ? ' on' : ''}"><span>${label}</span><select data-filter="${name}" aria-label="${label}">${
+    options.map(([v, l]) => `<option value="${v}"${v === value ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
+}
+/** Fila de filtros del apartado actual: desplegables, formato, leído/visto y prestados. */
 function renderFormatChips() {
   const box = $('#format-chips');
-  const formats = FORMATS[state.type] || [];
-  // Filtro leído/visto: en Todo, Libros y Películas (no en Música)
-  const seeable = state.items.filter(i => canSee(i) && (state.type === 'all' || i.type === state.type));
-  const showSeen = state.type !== 'cd' && seeable.length > 0;
-  if (!showSeen && state.seen !== 'all') state.seen = 'all';
-  box.hidden = !formats.length && !showSeen;
-  if (box.hidden) return;
-  const counts = {};
-  state.items.forEach(i => { if (i.type === state.type) counts[fmtOf(i)] = (counts[fmtOf(i)] || 0) + 1; });
-  let html = '';
-  if (formats.length) {
-    html += [['all', 'Todos'], ...formats.map(f => [f, f])].map(([v, l]) =>
-      `<button class="chip small${state.format === v ? ' active' : ''}" data-format="${v}">${l}${v !== 'all' && counts[v] ? ` <span>${counts[v]}</span>` : ''}</button>`).join('');
+  // En la pantalla principal («Todo») no hay filtros
+  if (state.type === 'all') {
+    state.seen = 'all'; state.loaned = false; state.format = 'all'; state.kind = 'all'; state.players = 'all';
+    box.hidden = true;
+    box.innerHTML = '';
+    return;
   }
-  if (showSeen) {
+  const inScope = i => state.type === 'all' || i.type === state.type;
+  const formats = FORMATS[state.type] || [];
+  const parts = [];
+  // Cine y series: película o serie
+  if (state.type === 'pelicula' && state.items.some(i => i.type === 'pelicula')) {
+    parts.push(selectHTML('kind', 'Ver', state.kind, [['all', 'Todo'], ['pelicula', 'Películas'], ['serie', 'Series']]));
+  } else state.kind = 'all';
+  // Juegos: número de jugadores
+  if (state.type === 'juego' && state.items.some(i => i.type === 'juego' && (i.playersMin != null || i.playersMax != null))) {
+    parts.push(selectHTML('players', 'Jugadores', state.players,
+      [['all', 'Todos'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5'], ['6', '6 o más']]));
+  } else state.players = 'all';
+  // Formatos
+  if (formats.length) {
+    const counts = {};
+    state.items.forEach(i => { if (i.type === state.type) counts[fmtOf(i)] = (counts[fmtOf(i)] || 0) + 1; });
+    parts.push([['all', 'Todos'], ...formats.map(f => [f, f])].map(([v, l]) =>
+      `<button class="chip small${state.format === v ? ' active' : ''}" data-format="${v}">${l}${v !== 'all' && counts[v] ? ` <span>${counts[v]}</span>` : ''}</button>`).join(''));
+  }
+  // Leído / visto (Todo, Libros y Cine y series)
+  const seeable = state.items.filter(i => canSee(i) && inScope(i));
+  if (state.type !== 'cd' && state.type !== 'juego' && seeable.length) {
     const lbl = SEEN[state.type] || { pend: 'Pendientes', many: 'Leídos y vistos' };
     const nDone = seeable.filter(i => i.seen).length;
-    if (formats.length) html += '<span class="chip-sep" aria-hidden="true"></span>';
-    html += [['pending', lbl.pend, seeable.length - nDone], ['done', lbl.many, nDone]].map(([v, l, n]) =>
-      `<button class="chip small seen-chip${state.seen === v ? ' active' : ''}" data-seen="${v}">${v === 'done' ? '<svg><use href="#i-check"/></svg>' : ''}${l}${n ? ` <span>${n}</span>` : ''}</button>`).join('');
-  }
-  box.innerHTML = html;
+    parts.push([['pending', lbl.pend, seeable.length - nDone], ['done', lbl.many, nDone]].map(([v, l, n]) =>
+      `<button class="chip small seen-chip${state.seen === v ? ' active' : ''}" data-seen="${v}">${v === 'done' ? '<svg><use href="#i-check"/></svg>' : ''}${l}${n ? ` <span>${n}</span>` : ''}</button>`).join(''));
+  } else state.seen = 'all';
+  // Prestados
+  const loaned = state.items.filter(i => i.loan && inScope(i)).length;
+  if (loaned) {
+    parts.push(`<button class="chip small loaned${state.loaned ? ' active' : ''}" data-loaned="1"><svg><use href="#i-hand"/></svg>Prestados <span>${loaned}</span></button>`);
+  } else state.loaned = false;
+  box.hidden = !parts.length;
+  box.innerHTML = parts.join('<span class="chip-sep" aria-hidden="true"></span>');
 }
 
 function render() {
+  renderFormatChips();            // ajusta filtros que ya no aplican antes de filtrar
   const list = filtered();
   const grid = $('#grid');
   grid.className = state.view === 'list' ? 'list' : 'grid';
   grid.innerHTML = list.map(state.view === 'list' ? rowHTML : cardHTML).join('');
 
-  const counts = { all: state.items.length, libro: 0, cd: 0, pelicula: 0 };
-  let loaned = 0;
-  state.items.forEach(i => { counts[i.type]++; if (i.loan) loaned++; });
-  $$('#type-chips .chip[data-type]').forEach(c => {
-    c.classList.toggle('active', c.dataset.type === state.type);
-    c.querySelector('span').textContent = counts[c.dataset.type] || '';
+  $$('#tabbar .tab').forEach(t => {
+    const on = t.dataset.type === state.type;
+    t.classList.toggle('active', on);
+    if (on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
   });
-  const lc = $('#chip-loaned');
-  if (!loaned && state.loaned) state.loaned = false;
-  lc.hidden = !loaned;
-  lc.classList.toggle('active', state.loaned);
-  lc.querySelector('span').textContent = loaned || '';
-  renderFormatChips();
 
   const vb = $('#btn-view');
   vb.querySelector('use').setAttribute('href', state.view === 'list' ? '#i-grid' : '#i-list');
   vb.setAttribute('aria-label', state.view === 'list' ? 'Ver portadas' : 'Vista compacta');
 
-  $('#count').textContent = list.length === state.items.length
-    ? plural(state.items.length, 'elemento', 'elementos')
-    : `${list.length} de ${state.items.length}`;
+  const scopeTotal = state.type === 'all' ? state.items.length : state.items.filter(i => i.type === state.type).length;
+  const where = state.type === 'all' ? 'Todo' : SECTION_LABEL[state.type];
+  $('#count').textContent = `${where} · ` + (list.length === scopeTotal
+    ? plural(scopeTotal, 'elemento', 'elementos')
+    : `${list.length} de ${scopeTotal}`);
+
+  // Total gastado del apartado elegido (en «Todo» no se muestra)
+  const st = $('#section-total');
+  const m = state.type !== 'all' ? sectionMoney(state.type) : null;
+  if (m && (m.priced || m.gifts)) {
+    const parts = [];
+    if (m.priced) parts.push(`Total en ${SECTION_NAME[state.type]}: <strong>${fmtPrice(m.total)}</strong> <small>(${plural(m.priced, 'con precio', 'con precio')})</small>`);
+    if (m.gifts) parts.push(`<svg><use href="#i-gift"/></svg>${plural(m.gifts, 'regalo', 'regalos')}`);
+    st.innerHTML = parts.map(p => `<span>${p}</span>`).join('');
+    st.hidden = false;
+  } else {
+    st.hidden = true;
+  }
 
   const empty = list.length === 0;
   $('#empty').hidden = !empty;
@@ -352,16 +458,24 @@ function renderTip() {
 /* ---------- Detalle ---------- */
 function openDetail(item) {
   state.detail = item;
-  $('#d-cover').innerHTML = coverHTML(item, { lazy: false });
+  $('#d-cover').innerHTML = coverHTML(item, { lazy: false, slot: slotFor(item.type) });
   const pill = $('#d-type');
-  pill.textContent = item.type === 'libro' ? 'Libro' : `${TYPES[item.type].label} · ${fmtOf(item)}`;
+  pill.textContent = item.type === 'pelicula' ? `${kindLabel(item)} · ${fmtOf(item)}` : FORMATS[item.type].length ? `${TYPES[item.type].label} · ${fmtOf(item)}` : TYPES[item.type].label;
   pill.style.background = `var(--${item.type})`;
   $('#d-title').textContent = item.title;
   $('#d-creator').textContent = item.creator || '';
   const meta = [];
+  if (seasonsText(item)) meta.push(['Temporadas', item.seasons]);
+  if (item.type === 'juego') {
+    if (playersText(item)) meta.push(['Jugadores', playersText(item)]);
+    if (item.duration) meta.push(['Duración', `${item.duration} min`]);
+    if (item.age) meta.push(['Edad', `${item.age}+`]);
+  }
   if (item.year) meta.push(['Año', item.year]);
   if (item.genre) meta.push(['Género', item.genre]);
   if (item.location) meta.push(['Ubicación', item.location]);
+  if (item.gift) meta.push(['Regalo', item.giftFrom ? `De ${item.giftFrom}` : 'Sí']);
+  else if (item.price != null) meta.push(['Precio', fmtPrice(item.price)]);
   if (item.code) meta.push([isISBN(item.code) ? 'ISBN' : 'Código', item.code]);
   if (item.createdAt) meta.push(['Añadido', new Date(item.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })]);
   $('#d-meta').innerHTML = meta.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
@@ -395,8 +509,7 @@ async function updateItem(item, changes) {
 
 async function lendItem() {
   const it = state.detail;
-  const people = [...new Set(state.items.flatMap(i => [i.loan?.to, ...(i.loanHistory || []).map(h => h.to)]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
-  $('#people').innerHTML = people.map(p => `<option value="${esc(p)}">`).join('');
+  fillDatalist('people', knownPeople());
   const r = await ask({
     title: `Prestar «${it.title}»`,
     fields: [
@@ -453,7 +566,7 @@ async function deleteItem() {
 }
 
 /* ---------- Formulario ---------- */
-const form = { type: 'libro', format: '', cover: '' };
+const form = { type: 'libro', format: '', kind: 'pelicula', cover: '' };
 
 function setSegmented(el, value) {
   el.querySelectorAll('button').forEach(b => {
@@ -469,24 +582,38 @@ function updateFormType() {
   if (formats.length && !formats.includes(form.format)) form.format = formats[0];
   if (!formats.length) form.format = '';
   setSegmented($('#f-type'), form.type);
-  const ff = $('#f-format');
-  ff.hidden = !formats.length;
-  ff.innerHTML = formats.map(f => `<button type="button" data-value="${f}">${f}</button>`).join('');
-  setSegmented(ff, form.format);
-  $('#f-creator-label').textContent = TYPES[form.type].creator;
+  // Desplegables: «¿Película o serie?» (cine) y «Formato» (música y cine)
+  const isCine = form.type === 'pelicula';
+  $('#f-select-row').hidden = !formats.length;
+  $('#f-kind-field').hidden = !isCine;
+  $('#f-kind').value = form.kind;
+  $('#f-seasons-field').hidden = !(isCine && form.kind === 'serie');
+  $('#f-format').innerHTML = formats.map(f => `<option value="${f}">${f}</option>`).join('');
+  $('#f-format').value = form.format;
+  $('#f-creator-label').textContent = isCine && form.kind === 'serie' ? 'Creador' : TYPES[form.type].creator;
   const isBook = form.type === 'libro';
+  const isGame = form.type === 'juego';
+  $('#f-game-fields').hidden = !isGame;
+  $('#f-year-genre').hidden = isGame;
+  $('#f-online').hidden = isGame;                       // portadas de juegos: pegando la URL
+  if (isGame) $('#online').hidden = true;
+  $('#f-notes-label').textContent = isGame ? 'Descripción' : 'Notas';
+  $('#f-notes').placeholder = isGame ? 'De qué va el juego, mecánicas, expansiones…' : 'Edición, estado, firmado…';
+  // En juegos la descripción va justo después de los datos del juego
+  const notes = $('#f-notes-wrap');
+  if (isGame) $('#f-game-fields').after(notes); else $('#f-notes-anchor').before(notes);
   const sl = SEEN[form.type];
   $('#f-seen-field').hidden = !sl;
   if (sl) $('#f-seen-label').textContent = sl.ask;
   $('#f-scan').hidden = !isBook;
   $('#f-code-field').hidden = !isBook;
-  $('#online-q').placeholder = form.type === 'libro' ? 'Título, autor o ISBN' : form.type === 'cd' ? 'Álbum y artista' : 'Título de la película';
+  $('#online-q').placeholder = form.type === 'libro' ? 'Título, autor o ISBN' : form.type === 'cd' ? 'Álbum y artista' : form.kind === 'serie' ? 'Título de la serie' : 'Título de la película';
   updateCoverPreview();
 }
 
 function updateCoverPreview() {
   const fake = { type: form.type, format: form.format, title: $('#f-title').value || 'Sin título', creator: $('#f-creator').value, cover: form.cover };
-  $('#f-cover-preview').innerHTML = coverHTML(fake, { lazy: false });
+  $('#f-cover-preview').innerHTML = coverHTML(fake, { lazy: false, slot: slotFor(form.type) });
   $('#f-cover-remove').hidden = !form.cover;
 }
 
@@ -500,6 +627,8 @@ function openForm(item = null) {
   $('#form-title').textContent = item ? 'Editar' : 'Añadir';
   form.type = item?.type || (state.type !== 'all' ? state.type : 'libro');
   form.format = item ? fmtOf(item) : (state.format !== 'all' ? state.format : '');
+  form.kind = item ? kindOf(item) : (state.kind !== 'all' ? state.kind : 'pelicula');
+  $('#f-seasons').value = item?.seasons || '';
   form.cover = item?.cover || '';
   $('#f-title').value = item?.title || '';
   $('#f-creator').value = item?.creator || '';
@@ -507,6 +636,15 @@ function openForm(item = null) {
   $('#f-genre').value = item?.genre || '';
   $('#f-location').value = item?.location || '';
   $('#f-seen').checked = !!item?.seen;
+  $('#f-pmin').value = item?.playersMin ?? '';
+  $('#f-pmax').value = item?.playersMax ?? '';
+  $('#f-duration').value = item?.duration ?? '';
+  $('#f-age').value = item?.age ?? '';
+  $('#f-price').value = priceInput(item?.price ?? null);
+  $('#f-gift').checked = !!item?.gift;
+  $('#f-gift-from').value = item?.giftFrom || '';
+  fillDatalist('people', knownPeople());
+  updateGiftField();
   $('#f-code').value = item?.code || '';
   $('#f-notes').value = item?.notes || '';
   $('#f-error').hidden = true;
@@ -527,7 +665,15 @@ function findDuplicate(item) {
   }
   const t = norm(item.title), c = norm(item.creator);
   return state.items.find(i => i.id !== item.id && i.type === item.type && norm(i.title) === t &&
-    (!c || !i.creator || norm(i.creator) === c));
+    (!c || !i.creator || norm(i.creator) === c) &&
+    // temporadas distintas de una misma serie no son duplicados
+    !(item.seasons && i.seasons && norm(item.seasons) !== norm(i.seasons)));
+}
+
+function updateGiftField() {
+  const gift = $('#f-gift').checked;
+  $('#f-price-wrap').hidden = gift;
+  $('#f-gift-from-wrap').hidden = !gift;
 }
 
 async function saveForm(e) {
@@ -537,6 +683,22 @@ async function saveForm(e) {
   const err = $('#f-error');
   if (!title) { err.textContent = 'Escribe al menos el título.'; err.hidden = false; $('#f-title').focus(); return; }
   if (year && !/^\d{4}$/.test(year)) { err.textContent = 'El año debe tener 4 cifras (p. ej. 1999).'; err.hidden = false; $('#f-year').focus(); return; }
+  // Datos de juegos
+  const isGame = form.type === 'juego';
+  const num = id => { const v = $(id).value.trim(); return v === '' ? null : (/^\d{1,4}$/.test(v) ? +v : NaN); };
+  const pmin = isGame ? num('#f-pmin') : null, pmax = isGame ? num('#f-pmax') : null;
+  const duration = isGame ? num('#f-duration') : null, age = isGame ? num('#f-age') : null;
+  const bad = (m, id) => { err.textContent = m; err.hidden = false; $(id).focus(); };
+  if (isGame) {
+    if (Number.isNaN(pmin) || Number.isNaN(pmax) || pmin === 0 || pmax === 0 || pmin > 99 || pmax > 99) return bad('Los jugadores deben ser números (p. ej. de 2 a 4).', '#f-pmin');
+    if (pmin != null && pmax != null && pmin > pmax) return bad('El mínimo de jugadores no puede ser mayor que el máximo.', '#f-pmin');
+    if (Number.isNaN(duration) || duration === 0 || duration > 2000) return bad('La duración debe ser un número de minutos (p. ej. 45).', '#f-duration');
+    if (Number.isNaN(age) || age > 99) return bad('La edad debe ser un número (p. ej. 10).', '#f-age');
+  }
+  const gift = $('#f-gift').checked;
+  const price = gift ? null : parsePrice($('#f-price').value);
+  if (Number.isNaN(price)) { err.textContent = 'El precio no es válido. Escríbelo así: 18,90'; err.hidden = false; $('#f-price').focus(); return; }
+  if (price != null && price > 100000) { err.textContent = 'Revisa el precio: parece demasiado alto.'; err.hidden = false; $('#f-price').focus(); return; }
   // El ISBN solo se pide en libros; en música y películas se conserva el código que ya tuviera
   const rawCode = form.type === 'libro' ? $('#f-code').value.trim() : '';
   const code = form.type === 'libro' ? (rawCode ? normalizeCode(rawCode) : '') : (state.editing?.code || '');
@@ -550,12 +712,18 @@ async function saveForm(e) {
     seenAt: undefined,
     type: form.type,
     format: form.format,
+    kind: form.type === 'pelicula' ? form.kind : '',
+    seasons: form.type === 'pelicula' && form.kind === 'serie' ? $('#f-seasons').value.trim() : '',
     title,
     creator: $('#f-creator').value.trim(),
     year,
     genre: $('#f-genre').value.trim(),
     location: $('#f-location').value.trim(),
     seen: !!SEEN[form.type] && $('#f-seen').checked,
+    playersMin: pmin, playersMax: pmax, duration, age,
+    price,
+    gift,
+    giftFrom: gift ? $('#f-gift-from').value.trim() : '',
     code,
     notes: $('#f-notes').value.trim(),
     cover: form.cover,
@@ -687,7 +855,9 @@ async function tmdbSearch(q) {
     tmdbFetch('/search/multi', { query: q, language: 'es-ES', include_adult: 'false' }),
     tmdbGenreMap(),
   ]);
-  const hits = (d.results || []).filter(r => (r.media_type === 'movie' || r.media_type === 'tv') && r.poster_path).slice(0, 8);
+  const prefer = form.kind === 'serie' ? 'tv' : 'movie';
+  const hits = (d.results || []).filter(r => (r.media_type === 'movie' || r.media_type === 'tv') && r.poster_path)
+    .sort((a, b) => (b.media_type === prefer) - (a.media_type === prefer)).slice(0, 8);
   const out = hits.map(r => ({
     title: r.title || r.name,
     creator: '',
@@ -750,8 +920,8 @@ async function wikiQuery(lang, params) {
 }
 async function wikiSearch(q) {
   const [es, en] = await Promise.all([
-    wikiQuery('es', { generator: 'search', gsrsearch: `${q} película`, gsrlimit: '8' }).catch(() => []),
-    wikiQuery('en', { generator: 'search', gsrsearch: `${q} film`, gsrlimit: '8' }).catch(() => []),
+    wikiQuery('es', { generator: 'search', gsrsearch: `${q} ${form.kind === 'serie' ? 'serie' : 'película'}`, gsrlimit: '8' }).catch(() => []),
+    wikiQuery('en', { generator: 'search', gsrsearch: `${q} ${form.kind === 'serie' ? 'TV series' : 'film'}`, gsrlimit: '8' }).catch(() => []),
   ]);
   const out = [];
   const add = p => { const it = wikiItem(p); if (it) out.push(it); };
@@ -781,7 +951,7 @@ async function searchMovies(q) {
   const [a, b, c] = await Promise.all([
     tmdbSearch(q).catch(e => { if (e.message === 'tmdb-auth') tmdbAuthError = true; return []; }),
     wikiSearch(q).catch(() => []),
-    itunes(q, 'movie').then(r => r.length >= 3 ? r : itunes(q, 'movie', 'US').then(us => [...r, ...us])).catch(() => []),
+    (ent => itunes(q, ent).then(r => r.length >= 3 ? r : itunes(q, ent, 'US').then(us => [...r, ...us])))(form.kind === 'serie' ? 'tvSeason' : 'movie').catch(() => []),
   ]);
   const seen = new Set();
   return [...a, ...b, ...c].filter(r => r.cover && !seen.has(r.cover) && seen.add(r.cover));
@@ -822,8 +992,8 @@ async function runOnlineSearch() {
     const isMovie = form.type === 'pelicula';
     lastResults = form.type === 'libro' ? await openLibrary(q) : isMovie ? await searchMovies(q) : await itunes(q, 'album');
     const hint = !isMovie ? '' : tmdbAuthError
-      ? ' La clave de TMDB no es válida: revísala en ⋯ → Portadas de películas.'
-      : !tmdbKey() ? ' Para encontrar casi todas, añade una clave gratuita de TMDB en ⋯ → Portadas de películas.' : '';
+      ? ' La clave de TMDB no es válida: revísala en ⋯ → Portadas de cine y series.'
+      : !tmdbKey() ? ' Para encontrar casi todas, añade una clave gratuita de TMDB en ⋯ → Portadas de cine y series.' : '';
     if (!lastResults.length) { status.textContent = 'Sin resultados. Prueba con el título original o con menos palabras.' + hint; return; }
     showResults(lastResults, 'Toca una portada para usarla.' + hint);
   } catch {
@@ -839,6 +1009,11 @@ function pickResult(i, { keepOpen = false, quiet = false } = {}) {
   if (!$('#f-creator').value.trim() && r.creator) $('#f-creator').value = r.creator;
   if (!$('#f-year').value.trim() && r.year) $('#f-year').value = r.year;
   if (!$('#f-genre').value.trim() && r.genre) $('#f-genre').value = r.genre;
+  if (r.tmdb && form.type === 'pelicula') {
+    form.kind = r.tmdb.type === 'tv' ? 'serie' : 'pelicula';
+    $('#f-kind').value = form.kind;
+    $('#f-creator-label').textContent = form.kind === 'serie' ? 'Creador' : 'Director';
+  }
   if (r.tmdb && !$('#f-creator').value.trim()) {
     tmdbCreator(r.tmdb).then(name => {
       if (name && !$('#f-creator').value.trim()) { $('#f-creator').value = name; updateCoverPreview(); }
@@ -1154,6 +1329,59 @@ async function saveTmdbKey() {
   }
 }
 
+/* ---------- Inventario para Excel (CSV) ---------- */
+function exportInventory() {
+  if (!state.items.length) { toast('La biblioteca está vacía'); return; }
+  const cols = [
+    ['Apartado', i => SECTION_LABEL[i.type]],
+    ['Tipo', i => i.type === 'pelicula' ? kindLabel(i) : TYPES[i.type].label],
+    ['Título', i => i.title],
+    ['Autor / Artista / Director / Editorial', i => i.creator],
+    ['Año', i => i.year],
+    ['Formato', i => fmtOf(i)],
+    ['Temporadas', i => seasonsText(i) ? i.seasons : ''],
+    ['Género', i => i.genre],
+    ['ISBN', i => i.code ? `="${i.code}"` : ''],                    // ="…" evita que Excel lo convierta en número
+    ['Jugadores', i => i.type === 'juego' ? playersText(i) : ''],
+    ['Duración (min)', i => i.type === 'juego' ? i.duration ?? '' : ''],
+    ['Edad mínima', i => i.type === 'juego' ? i.age ?? '' : ''],
+    ['Ubicación', i => i.location],
+    ['Precio (€)', i => !i.gift && i.price != null ? i.price.toFixed(2).replace('.', ',') : ''],
+    ['Regalo', i => i.gift ? 'Sí' : ''],
+    ['Regalo de', i => i.gift ? i.giftFrom : ''],
+    ['Leído / visto', i => canSee(i) ? (i.seen ? 'Sí' : 'No') : ''],
+    ['Prestado a', i => i.loan?.to || ''],
+    ['Prestado desde', i => i.loan ? fmtDate(i.loan.since) : ''],
+    ['Notas / descripción', i => i.notes],
+    ['Portada (URL)', i => /^https?:/.test(i.cover || '') ? i.cover : ''],
+    ['Añadido', i => i.createdAt ? new Date(i.createdAt).toLocaleDateString('es-ES') : ''],
+  ];
+  const cell = v => {
+    const t = (v ?? '').toString();
+    if (t.startsWith('="')) return t;
+    return /[;"\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  const cmp = (a, b) => a.localeCompare(b, 'es', { sensitivity: 'base', numeric: true });
+  const rows = [...state.items].sort((a, b) =>
+    TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type) || cmp(titleKey(a.title), titleKey(b.title)));
+  // Separador «;» y BOM UTF-8: así Excel en español lo abre bien, con tildes y decimales con coma
+  const csv = '\ufeff' + [cols.map(c => cell(c[0])).join(';'), ...rows.map(i => cols.map(c => cell(c[1](i))).join(';'))].join('\r\n');
+  const name = `mi-biblioteca-inventario-${today()}.csv`;
+  const file = new File([csv], name, { type: 'text/csv' });
+  // En el móvil: menú de compartir (guardar en Archivos, enviar por correo…); en el ordenador: descarga
+  if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [file] })) {
+    navigator.share({ files: [file], title: 'Inventario Mi Biblioteca' }).catch(() => {});
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  toast('Inventario descargado');
+}
+
 /* ---------- Copia de seguridad ---------- */
 function exportData() {
   const data = { app: 'mi-biblioteca', version: 3, exportedAt: new Date().toISOString(), items: state.items, deleted: getDeleted() };
@@ -1199,21 +1427,32 @@ async function importData(file) {
 }
 
 function updateStats() {
-  const c = { libro: 0, cd: 0, pelicula: 0 }, f = {};
+  const c = { libro: 0, cd: 0, pelicula: 0, juego: 0 }, f = {};
   state.items.forEach(i => { c[i.type]++; const k = fmtOf(i); if (k) f[k] = (f[k] || 0) + 1; });
   const part = fs => fs.filter(x => f[x]).map(x => `${f[x]} ${x}`).join(', ');
   const loaned = state.items.filter(i => i.loan).length;
   $('#stats').textContent = [
     plural(c.libro, 'libro', 'libros'),
     `${c.cd} de música${part(FORMATS.cd) ? ` (${part(FORMATS.cd)})` : ''}`,
-    `${plural(c.pelicula, 'película', 'películas')}${part(FORMATS.pelicula) ? ` (${part(FORMATS.pelicula)})` : ''}`,
+    `${c.pelicula} de cine y series${part(FORMATS.pelicula) ? ` (${part(FORMATS.pelicula)})` : ''}`,
+    plural(c.juego, 'juego', 'juegos'),
   ].join(' · ') + (loaned ? ` · ${loaned} prestado${loaned === 1 ? '' : 's'}` : '');
   const sb = state.items.filter(i => i.type === 'libro' && i.seen).length;
   const sp = state.items.filter(i => i.type === 'pelicula' && i.seen).length;
   const parts = [];
   if (c.libro) parts.push(`${sb} de ${plural(c.libro, 'libro leído', 'libros leídos')}`);
-  if (c.pelicula) parts.push(`${sp} de ${plural(c.pelicula, 'película vista', 'películas vistas')}`);
+  if (c.pelicula) parts.push(`${sp} de ${c.pelicula} películas y series vistas`);
   $('#stats-seen').textContent = parts.join(' · ');
+  const rows = TYPE_ORDER.map(t => {
+    const m = sectionMoney(t);
+    if (!m.priced && !m.gifts) return '';
+    const label = SECTION_LABEL[t];
+    const bits = [];
+    if (m.priced) bits.push(`${fmtPrice(m.total)} (${m.priced} con precio)`);
+    if (m.gifts) bits.push(plural(m.gifts, 'regalo', 'regalos'));
+    return `<li><span>${label}</span><span>${bits.join(' · ')}</span></li>`;
+  }).filter(Boolean);
+  $('#stats-money').innerHTML = rows.length ? `<strong>Gastado por apartado</strong><ul class="money-list">${rows.join('')}</ul>` : '';
 }
 
 /* ---------- Sincronización con GitHub ----------
@@ -1490,18 +1729,29 @@ function setupServiceWorker() {
 /* ---------- Eventos ---------- */
 function bind() {
   // Filtros
-  $('#type-chips').addEventListener('click', e => {
-    const c = e.target.closest('.chip'); if (!c) return;
-    if (c.id === 'chip-loaned') { state.loaned = !state.loaned; render(); return; }
-    state.type = c.dataset.type;
+  const goTo = type => {
+    state.type = type;
     state.format = 'all';
+    state.players = 'all';
+    state.kind = 'all';
     localStorage.setItem('mb-type', state.type);
     render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  $('#tabbar').addEventListener('click', e => {
+    const t = e.target.closest('.tab'); if (!t) return;
+    goTo(state.type === t.dataset.type ? 'all' : t.dataset.type);   // tocar el apartado activo vuelve a «Todo»
+  });
+  $('#btn-home').addEventListener('click', () => goTo('all'));
+  $('#format-chips').addEventListener('change', e => {
+    const sel = e.target.closest('select[data-filter]'); if (!sel) return;
+    state[sel.dataset.filter] = sel.value;
+    render();
   });
   $('#format-chips').addEventListener('click', e => {
     const c = e.target.closest('.chip'); if (!c) return;
-    if (c.dataset.seen) state.seen = state.seen === c.dataset.seen ? 'all' : c.dataset.seen;   // tocar otra vez lo quita
+    if (c.dataset.loaned) state.loaned = !state.loaned;
+    else if (c.dataset.seen) state.seen = state.seen === c.dataset.seen ? 'all' : c.dataset.seen;   // tocar otra vez lo quita
     else state.format = c.dataset.format;
     render();
   });
@@ -1582,14 +1832,12 @@ function bind() {
     $('#online-results').innerHTML = ''; $('#online-status').textContent = '';
     updateFormType();
   });
-  $('#f-format').addEventListener('click', e => {
-    const b = e.target.closest('button'); if (!b) return;
-    form.format = b.dataset.value;
-    setSegmented($('#f-format'), form.format);
-    updateCoverPreview();
-  });
+  $('#f-format').addEventListener('change', e => { form.format = e.target.value; updateCoverPreview(); });
+  $('#f-kind').addEventListener('change', e => { form.kind = e.target.value; updateFormType(); });
+  $('#f-gift').addEventListener('change', () => { updateGiftField(); if ($('#f-gift').checked) $('#f-gift-from').focus(); });
   $('#f-title').addEventListener('input', updateCoverPreview);
   $('#f-creator').addEventListener('input', updateCoverPreview);
+  ['#f-pmin', '#f-pmax', '#f-duration', '#f-age'].forEach(id => $(id).addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4); }));
   $('#f-year').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4); });
   $('#form').addEventListener('submit', saveForm);
   $('#f-url').addEventListener('click', pasteCoverUrl);
@@ -1638,6 +1886,7 @@ function bind() {
     render();
   });
   $('#btn-export').addEventListener('click', exportData);
+  $('#btn-inventory').addEventListener('click', exportInventory);
   $('#file-import').addEventListener('change', e => { const f = e.target.files[0]; if (f) importData(f); e.target.value = ''; });
 
   // Sincronización con GitHub
